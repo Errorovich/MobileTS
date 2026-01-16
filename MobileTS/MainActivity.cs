@@ -23,7 +23,7 @@ namespace MobileTS {
                 RequestPermissions([Manifest.Permission.RecordAudio], 1001);
             }
 
-            var audioManager = (AudioManager)GetSystemService(AudioService);
+            /*var audioManager = (AudioManager)GetSystemService(AudioService);
 
             var result = audioManager.RequestAudioFocus(
                 null,
@@ -39,7 +39,10 @@ namespace MobileTS {
             Thread thread = new Thread(() => {  
                 DedicatedTaskScheduler.FromCurrentThread(() => Start());
             });
-            thread.Start();
+            thread.Start();*/
+
+            Client.Init(this);
+            Client.Connect("79.174.93.181", "Kazah", "qwerty.xyz");
 
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.activity_main);
