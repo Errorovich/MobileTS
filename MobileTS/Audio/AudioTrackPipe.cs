@@ -2,8 +2,10 @@
 using TSLib;
 using TSLib.Audio;
 
-namespace MobileTS {
-    public class AudioTrackPipe : IAudioPassiveConsumer {
+namespace MobileTS.Audio
+{
+    public class AudioTrackPipe : IAudioPassiveConsumer
+    {
         private static readonly AudioAttributes audioAttributes = new AudioAttributes.Builder()
             .SetUsage(AudioUsageKind.Media)
             .SetContentType(AudioContentType.Speech)
@@ -15,13 +17,12 @@ namespace MobileTS {
                 .Build();
 
         private readonly Dictionary<ClientId, AudioTrack> audioTracks = new();
-        public AudioTrackPipe() {
-
-        }
+        public AudioTrackPipe() { }
 
         public bool Active => true;
 
-        public void Write(Span<byte> data, Meta? meta) {
+        public void Write(Span<byte> data, Meta? meta)
+        {
             if (meta is null)
                 return;
 
@@ -29,7 +30,8 @@ namespace MobileTS {
             audioTrack.Write(data.ToArray(), 0, data.Length);
         }
 
-        private AudioTrack GetAudioTrack(ClientId clientId) {
+        private AudioTrack GetAudioTrack(ClientId clientId)
+        {
             if (audioTracks.TryGetValue(clientId, out var audioTrack))
                 return audioTrack;
 

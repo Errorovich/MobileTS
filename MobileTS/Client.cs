@@ -5,6 +5,7 @@ using Android.Media;
 using Android.Media.TV;
 using Android.Provider;
 using Android.Runtime;
+using MobileTS.Audio;
 using TSLib;
 using TSLib.Audio;
 using TSLib.Audio.Opus;
@@ -18,11 +19,16 @@ namespace MobileTS
     {
         public static TsFullClient? Instance { get => client; }
         public static event Action<TsFullClient>? OnInstanceReady;
+        public static event Action<VoiceActivationTrackerPipe.ClientVoiceStatus> OnClientIsTalkingChanged {
+            add => voiceActivationTrackerPipe.OnClientIsTalkingChanged += value;
+            remove => voiceActivationTrackerPipe.OnClientIsTalkingChanged -= value;
+        }
 
         private static IdentityData identity;
         private static Thread clientThread;
         private static TsFullClient client;
         private static ContextWrapper context;
+        private static VoiceActivationTrackerPipe voiceActivationTrackerPipe;
         public static void Init(ContextWrapper contextWrapper)
         {
             context = contextWrapper;
@@ -88,7 +94,8 @@ namespace MobileTS
             encoderPipe.Chain(client);
 
             DecoderPipe decoderPipe = client.Chain(new DecoderPipe());
-            AudioTrackPipe audioTrackPipe = decoderPipe.Chain(new AudioTrackPipe());
+            voiceActivationTrackerPipe = decoderPipe.Chain(new VoiceActivationTrackerPipe());
+            AudioTrackPipe audioTrackPipe = voiceActivationTrackerPipe.Chain(new AudioTrackPipe());
 
             preciseTimedPipe.ReadBufferSize = 960 * 2;
             preciseTimedPipe.Paused = false;
