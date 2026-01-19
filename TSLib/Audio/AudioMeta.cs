@@ -22,6 +22,7 @@ namespace TSLib.Audio
 	public struct MetaIn
 	{
 		public ClientId Sender { get; set; }
+		public ushort Seq { get; set; }
 		public bool Whisper { get; set; }
 	}
 

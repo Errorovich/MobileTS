@@ -16,29 +16,36 @@ namespace MobileTS
 {
     internal static class Client
     {
-        static IdentityData identity;
-        static Thread clientThread;
-        static TsFullClient client;
-        static ContextWrapper context;
+        public static TsFullClient? Instance { get => client; }
+        public static event Action<TsFullClient>? OnInstanceReady;
+
+        private static IdentityData identity;
+        private static Thread clientThread;
+        private static TsFullClient client;
+        private static ContextWrapper context;
         public static void Init(ContextWrapper contextWrapper)
         {
             context = contextWrapper;
+            //identity = TsCrypt.GenerateNewIdentity();
 
-            ISharedPreferences sharedPreferences = context.GetSharedPreferences("ts_client", FileCreationMode.Private);
+            ISharedPreferences? sharedPreferences = context.GetSharedPreferences("ts_client", FileCreationMode.Private);
 
             if (sharedPreferences == null)
                 return;
 
             string? privateKey = sharedPreferences.GetString("ts_private_key", null);
-            if(privateKey != null)
-                identity = new IdentityData(new Org.BouncyCastle.Math.BigInteger(privateKey));
+            if (privateKey == null)
+                return;
+            if(ulong.TryParse(sharedPreferences.GetString("ts_key_offset", null), out ulong keyOffset))
+                identity = TsCrypt.LoadIdentity(privateKey, keyOffset).Value;
             else
             {
                 identity = TsCrypt.GenerateNewIdentity();
-                ISharedPreferencesEditor editor = sharedPreferences.Edit();
+                ISharedPreferencesEditor? editor = sharedPreferences.Edit();
                 if(editor != null)
                 {
                     editor.PutString("ts_private_key", identity.PrivateKeyString);
+                    editor.PutString("ts_key_offset", identity.ValidKeyOffset.ToString());
                     editor.Commit();
                 }
             }
@@ -47,9 +54,11 @@ namespace MobileTS
 
             var result = audioManager.RequestAudioFocus(
                 null,
-                Android.Media.Stream.VoiceCall,
+                Android.Media.Stream.Music,
                 AudioFocus.Gain);
         }
+
+        public static void Connect(ServerInfo serverInfo) => Connect(serverInfo.Address, serverInfo.Nickname, serverInfo.ServerPassword, serverInfo.DefaultChannel, serverInfo.DefaultChannelPassword);
 
         public static void Connect(string address, string? nickname = null, string? serverPassword = null, string? defaultChannel = null, string? defaultChannelPassword = null)
         {
@@ -58,9 +67,9 @@ namespace MobileTS
                 identity, 
                 TsVersionSigned.VER_AND_3_5_0, 
                 nickname, 
-                serverPassword == null ? null : Password.FromPlain(serverPassword), 
+                serverPassword == null ? Password.Empty : Password.FromPlain(serverPassword), 
                 defaultChannel,
-                defaultChannelPassword == null ? null : Password.FromPlain(defaultChannelPassword));
+                defaultChannelPassword == null ? Password.Empty : Password.FromPlain(defaultChannelPassword));
             clientThread = new Thread(() => {
                 DedicatedTaskScheduler.FromCurrentThread(() => ClientThread(conData));
             });
@@ -70,27 +79,19 @@ namespace MobileTS
         public static async void ClientThread(ConnectionDataFull conData)
         {
             client = new TsFullClient((DedicatedTaskScheduler)TaskScheduler.Current);
+            OnInstanceReady?.Invoke(client);
             await client.Connect(conData);
 
-            byte[] readBuffer = new byte[1920];
-            byte[] encoderBuffer = new byte[4096];
+            AudioRecordPipe audioRecordPipe = new AudioRecordPipe();
+            PreciseTimedPipe preciseTimedPipe = audioRecordPipe.Into(new PreciseTimedPipe(new SampleInfo(48000, 1, 16), TSLib.Helper.Id.Null));
+            EncoderPipe encoderPipe = preciseTimedPipe.Chain(new EncoderPipe(Codec.OpusVoice));
+            encoderPipe.Chain(client);
 
-            OpusEncoder encoder = OpusEncoder.Create(48000, 1, TSLib.Audio.Opus.Application.Voip);
+            DecoderPipe decoderPipe = client.Chain(new DecoderPipe());
+            AudioTrackPipe audioTrackPipe = decoderPipe.Chain(new AudioTrackPipe());
 
-            AudioRecord audioRecord = new AudioRecord(
-                AudioSource.VoiceCommunication,
-                48000,
-                ChannelIn.Mono,
-                Encoding.Pcm16bit,
-                readBuffer.Length);
-            audioRecord.StartRecording();
-
-            while (client.Connected)
-            {
-                audioRecord.Read(readBuffer, 0, readBuffer.Length);
-                var encoded = encoder.Encode(readBuffer, readBuffer.Length, encoderBuffer);
-                client.SendAudio(encoded, Codec.OpusVoice);
-            }
+            preciseTimedPipe.ReadBufferSize = 960 * 2;
+            preciseTimedPipe.Paused = false;
         }
 
         public static async Task<(bool, ChannelListResponse[])> GetChannels()
@@ -107,7 +108,7 @@ namespace MobileTS
         {
             return (await client.ClientMove(client.ClientId, channel)).GetOk(out _);
         }
-        public static async void Disconnect()
+        public static async Task Disconnect()
         {
             await client.Disconnect();
         }

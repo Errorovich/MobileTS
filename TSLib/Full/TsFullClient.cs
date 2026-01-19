@@ -72,6 +72,7 @@ namespace TSLib.Full
 
 		public override event EventHandler<DisconnectEventArgs>? OnDisconnected;
 		public event EventHandler<CommandError>? OnErrorEvent;
+		public event EventHandler<TsClientStatus>? OnStatusChangedEvent;
 
 		/// <summary>Creates a new client. A client can manage one connection to a server.</summary>
 		/// <param name="dispatcherType">The message processing method for incomming notifications.
@@ -206,7 +207,9 @@ namespace TSLib.Full
 				Trace.Fail($"Invalid transition change from {status} to {setStatus}");
 				break;
 			}
-		}
+
+			OnStatusChangedEvent?.Invoke(this, status);
+        }
 
 		private void PacketEvent(ConnectionContext ctx, ref Packet<S2C> packet)
 		{
@@ -230,14 +233,16 @@ namespace TSLib.Full
 
 			case PacketType.Voice:
 			case PacketType.VoiceWhisper:
-				OutStream?.Write(packet.Data, new Meta
-				{
-					In = new MetaIn
-					{
-						Whisper = packet.PacketType == PacketType.VoiceWhisper
-					}
-				});
-				break;
+                    Span<byte> packetData = packet.Data.AsSpan();
+                    OutStream?.Write(packetData.Slice(5), new Meta {
+                        In = new MetaIn {
+                            Sender = new ClientId(BinaryPrimitives.ReadUInt16BigEndian(packetData.Slice(2))),
+                            Seq = BinaryPrimitives.ReadUInt16BigEndian(packetData),
+                            Whisper = packet.PacketType == PacketType.VoiceWhisper
+                        },
+                        Codec = (Codec)packetData[4]
+                    });
+                    break;
 
 			case PacketType.Init1:
 				// Init error
@@ -759,7 +764,7 @@ namespace TSLib.Full
 
 		#endregion
 
-		private enum TsClientStatus
+		public enum TsClientStatus
 		{
 			Disconnected,
 			Disconnecting,

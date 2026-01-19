@@ -63,42 +63,47 @@ namespace TSLib.Audio.Opus
 			OutputChannels = outputChannels;
 		}
 
-		/// <summary>
-		/// Produces PCM samples from Opus encoded data.
-		/// </summary>
-		/// <param name="inputOpusData">Opus encoded data to decode, null for dropped packet.</param>
-		/// <param name="outputDecodedBuffer">PCM audio samples buffer.</param>
-		/// <returns>PCM audio samples.</returns>
-		public Span<byte> Decode(Span<byte> inputOpusData, Span<byte> outputDecodedBuffer)
-		{
-			if (disposed)
-				throw new ObjectDisposedException(nameof(OpusDecoder));
+        /// <summary>
+        /// Produces PCM samples from Opus encoded data.
+        /// </summary>
+        /// <param name="inputOpusData">Opus encoded data to decode, null for dropped packet.</param>
+        /// <param name="outputDecodedBuffer">PCM audio samples buffer.</param>
+        /// <returns>PCM audio samples.</returns>
+        public Span<byte> Decode(Span<byte> inputOpusData, ushort seq, Span<byte> outputDecodedBuffer) {
+            if (disposed)
+                throw new ObjectDisposedException(nameof(OpusDecoder));
 
-			if (inputOpusData.Length == 0)
-				return Span<byte>.Empty;
+            if (inputOpusData.Length < 2)
+                return Span<byte>.Empty;
 
-			int frameSize = FrameCount(outputDecodedBuffer.Length);
+            int frameSize;
+            int length;
 
-			int length = NativeMethods.opus_decode(decoder, MemoryMarshal.GetReference(inputOpusData), inputOpusData.Length, out MemoryMarshal.GetReference(outputDecodedBuffer), frameSize, 0);
+            if (lastSeq != ushort.MaxValue && seq != lastSeq + 1) {
+                frameSize = FrameCount(outputDecodedBuffer.Length);
+                length = NativeMethods.opus_decode(decoder, null, 0, out MemoryMarshal.GetReference(outputDecodedBuffer), frameSize, 0);
+            }
 
-			if (length < 0)
-				throw new Exception("Decoding failed - " + (Errors)length);
+            byte[] packet = inputOpusData.ToArray();
 
-			// TODO implement forward error corrected packet
-			//else
-			//	length = NativeMethods.opus_decode(decoder, null, 0, decoded, frameCount, (ForwardErrorCorrection) ? 1 : 0);
+            frameSize = FrameCount(outputDecodedBuffer.Length);
 
-			var decodedLength = length * 2 * OutputChannels;
+            length = NativeMethods.opus_decode(decoder, packet, inputOpusData.Length, out MemoryMarshal.GetReference(outputDecodedBuffer), frameSize, 0);
 
-			return outputDecodedBuffer.Slice(0, decodedLength);
-		}
+            if (length < 0)
+                return Span<byte>.Empty;
 
-		/// <summary>
-		/// Determines the number of frames that can fit into a buffer of the given size.
-		/// </summary>
-		/// <param name="bufferSize"></param>
-		/// <returns></returns>
-		public int FrameCount(int bufferSize)
+            var decodedLength = length * 2 * OutputChannels;
+
+            return outputDecodedBuffer.Slice(0, decodedLength);
+        }
+
+        /// <summary>
+        /// Determines the number of frames that can fit into a buffer of the given size.
+        /// </summary>
+        /// <param name="bufferSize"></param>
+        /// <returns></returns>
+        public int FrameCount(int bufferSize)
 		{
 			//  seems like bitrate should be required
 			const int bitrate = 16;
@@ -127,6 +132,7 @@ namespace TSLib.Audio.Opus
 		}
 
 		private bool disposed;
+		private ushort lastSeq = ushort.MaxValue;
 		public void Dispose()
 		{
 			if (disposed)

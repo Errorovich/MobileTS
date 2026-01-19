@@ -75,10 +75,10 @@ namespace TSLib.Audio.Opus
 		[DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
 		internal static extern void opus_decoder_destroy(IntPtr decoder);
 
-		[DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
-		internal static extern int opus_decode(IntPtr st, in byte data, int len, out byte pcm, int frameSize, int decodeFec);
+        [DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int opus_decode(IntPtr st, byte[]? data, int len, out byte pcm, int frameSize, int decodeFec);
 
-		[DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
 		internal static extern int opus_encoder_ctl(IntPtr st, Ctl request, int value);
 
 		[DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
@@ -86,10 +86,25 @@ namespace TSLib.Audio.Opus
 
 		[DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
 		internal static extern IntPtr opus_get_version_string();
-#pragma warning restore IDE1006
-	}
 
-	public enum Ctl : int
+        [DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int opus_packet_get_nb_frames(in byte data, int len);
+
+        [DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int opus_packet_get_bandwidth(in byte data);
+
+		[DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
+		internal static extern int opus_packet_get_nb_channels(in byte data);
+
+        [DllImport("libopus", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int opus_packet_get_samples_per_frame(in byte data, int Fs);
+
+
+
+#pragma warning restore IDE1006
+    }
+
+    public enum Ctl : int
 	{
 		SetBitrateRequest = 4002,
 		GetBitrateRequest = 4003,
