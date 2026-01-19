@@ -1,16 +1,7 @@
-﻿using Android;
-using Android.Content;
-using Android.Content.PM;
-using Android.Security.Keystore;
+﻿using Android.Content;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
-using Java.Security;
-using Javax.Crypto;
-using Javax.Crypto.Spec;
-using System.Text;
 using System.Text.Json;
-using TSLib.Full;
-using TSLib.Messages;
 using static TSLib.Full.TsFullClient;
 
 namespace MobileTS {
@@ -18,7 +9,6 @@ namespace MobileTS {
     public class ServersActivity : Activity {
         private const string PrefsName = "servers_storage";
         private const string ServersKey = "servers";
-        private const string KeyAlias = "server_password_key";
 
         private readonly List<ServerInfo> _servers = new();
         private ServerAdapter? _adapter;
@@ -29,7 +19,7 @@ namespace MobileTS {
             Client.Init(this);
             SetContentView(Resource.Layout.activity_servers);
 
-            EnsureKey();
+            Crypto.EnsureKey();
 
             var recycler = FindViewById<RecyclerView>(Resource.Id.recycler)!;
             recycler.SetLayoutManager(new LinearLayoutManager(this));
@@ -54,14 +44,17 @@ namespace MobileTS {
         private void LoadServers() {
             var prefs = GetSharedPreferences(PrefsName, FileCreationMode.Private);
             var json = prefs.GetString(ServersKey, null);
-            if (string.IsNullOrEmpty(json))
-                return;
-
-            var list = JsonSerializer.Deserialize<List<ServerInfo>>(json);
-            if (list != null) {
-                _servers.Clear();
-                _servers.AddRange(list);
+            if (!string.IsNullOrEmpty(json)) {
+                var list = JsonSerializer.Deserialize<List<ServerInfo>>(json);
+                if (list != null) {
+                    _servers.Clear();
+                    _servers.AddRange(list);
+                }
             }
+        }
+
+        protected override void OnDestroy() {
+            base.OnDestroy();
         }
 
         // ================= DIALOG =================
@@ -80,21 +73,18 @@ namespace MobileTS {
                 txtAddress.Text = server.Address;
                 txtUser.Text = server.Nickname;
                 txtChannel.Text = server.DefaultChannel;
-
-                // Пароли НЕ подставляем
             }
 
-            dialog.FindViewById<Button>(Resource.Id.btnSave)!.Click += (_, _) =>
-            {
+            dialog.FindViewById<Button>(Resource.Id.btnSave)!.Click += (_, _) => {
                 var encryptedServerPass =
                     string.IsNullOrEmpty(txtPassword.Text)
                         ? server?.ServerPassword
-                        : Encrypt(txtPassword.Text!);
+                        : Crypto.Encrypt(txtPassword.Text!);
 
                 var encryptedChannelPass =
                     string.IsNullOrEmpty(txtChannelPassword.Text)
                         ? server?.DefaultChannelPassword
-                        : Encrypt(txtChannelPassword.Text!);
+                        : Crypto.Encrypt(txtChannelPassword.Text!);
 
                 if (server == null) {
                     _servers.Add(new ServerInfo {
@@ -148,11 +138,11 @@ namespace MobileTS {
                 vh.User.Text = $"User: {server.Nickname}";
                 vh.Channel.Text = $"Channel: {server.DefaultChannel}";
 
-                vh.ItemView.Click += (_, _) =>
-                {
-                    var nickname = string.IsNullOrWhiteSpace(server.Nickname) ? "Guest" : server.Nickname;
-                    var serverPassword = _activity.Decrypt(server.ServerPassword) ?? "";
-                    var channelPassword = _activity.Decrypt(server.DefaultChannelPassword) ?? "";
+                vh.ItemView.Click += (_, _) => {
+                    // Передаем весь объект в сервис, пароли остаются зашифрованными
+                    Intent clientServiceIntent = new Intent(_activity, typeof(ClientService));
+                    clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server));
+                    _activity.StartService(clientServiceIntent);
 
                     // Показываем ProgressDialog
                     var progress = new ProgressDialog(_activity);
@@ -160,56 +150,27 @@ namespace MobileTS {
                     progress.SetCancelable(false);
                     progress.Show();
 
-                    // Метод обработки изменения статуса
-                    void StatusChanged(object? sender, TsClientStatus status) {
-                        _activity.RunOnUiThread(() =>
-                        {
-                            if (status == TsClientStatus.Connected) {
-                                progress.Dismiss();
-
-                                Client.Instance!.OnStatusChangedEvent -= StatusChanged;
-
-                                _activity.StartActivity(new Intent(_activity, typeof(ServerActivity)));
-                            }
-                            else if (status == TsClientStatus.Disconnected) {
-                                progress.Dismiss();
-
-                                Client.Instance!.OnStatusChangedEvent -= StatusChanged;
-
-                                // Возврат к списку серверов
-                                // Если мы на ServerActivity, она должна вызвать Finish()
-                            }
-                        });
-                    }
-
-                    // Подписка на событие статуса с учётом того, что Instance может быть ещё null
-                    if (Client.Instance != null) {
-                        Client.Instance.OnStatusChangedEvent += StatusChanged;
-                    }
-                    else {
-                        // Подписка на событие появления Instance
-                        void InstanceReadyHandler(TsFullClient instance) {
-                            instance.OnStatusChangedEvent += StatusChanged;
-                            Client.OnInstanceReady -= InstanceReadyHandler; // отписываемся, чтобы не вызвать повторно
+                    // Подписка на статус через SubscribeInstance
+                    Client.SubscribeInstance(c => {
+                        void StatusChanged(object? sender, TsClientStatus status) {
+                            _activity.RunOnUiThread(() => {
+                                if (status == TsClientStatus.Connected) {
+                                    progress.Dismiss();
+                                    _activity.StartActivity(new Intent(_activity, typeof(ServerActivity)));
+                                }
+                                else if (status == TsClientStatus.Disconnected) {
+                                    progress.Dismiss();
+                                }
+                            });
                         }
 
-                        Client.OnInstanceReady += InstanceReadyHandler;
-                    }
-
-                    // Запуск подключения
-                    Client.Connect(
-                        server.Address,
-                        nickname,
-                        serverPassword,
-                        server.DefaultChannel,
-                        channelPassword
-                    );
+                        c.OnStatusChangedEvent += StatusChanged;
+                    });
                 };
 
                 vh.Edit.Click += (_, _) => _activity.ShowServerDialog(server);
 
-                vh.Delete.Click += (_, _) =>
-                {
+                vh.Delete.Click += (_, _) => {
                     _items.RemoveAt(position);
                     NotifyItemRemoved(position);
                     _activity.SaveServers();
@@ -231,72 +192,6 @@ namespace MobileTS {
                 Edit = itemView.FindViewById<Button>(Resource.Id.btnEdit)!;
                 Delete = itemView.FindViewById<Button>(Resource.Id.btnDelete)!;
             }
-        }
-
-        // ================= CRYPTO =================
-
-        private void EnsureKey() {
-            var ks = KeyStore.GetInstance("AndroidKeyStore")!;
-            ks.Load(null);
-
-            if (ks.ContainsAlias(KeyAlias))
-                return;
-
-            var keyGenerator = KeyGenerator.GetInstance(KeyProperties.KeyAlgorithmAes, "AndroidKeyStore")!;
-            var spec = new KeyGenParameterSpec.Builder(
-                    KeyAlias,
-                    KeyStorePurpose.Encrypt | KeyStorePurpose.Decrypt)
-                .SetBlockModes(KeyProperties.BlockModeGcm)
-                .SetEncryptionPaddings(KeyProperties.EncryptionPaddingNone)
-                .Build();
-
-            keyGenerator.Init(spec);
-            keyGenerator.GenerateKey();
-        }
-
-        private string? Encrypt(string? plainText) {
-            if (string.IsNullOrEmpty(plainText))
-                return null;
-
-            var cipher = Cipher.GetInstance("AES/GCM/NoPadding")!;
-            var key = GetKey();
-
-            cipher.Init(CipherMode.EncryptMode, key);
-
-            var iv = cipher.GetIV();
-            var encrypted = cipher.DoFinal(Encoding.UTF8.GetBytes(plainText));
-
-            var result = new byte[iv.Length + encrypted.Length];
-            Buffer.BlockCopy(iv, 0, result, 0, iv.Length);
-            Buffer.BlockCopy(encrypted, 0, result, iv.Length, encrypted.Length);
-
-            return Convert.ToBase64String(result);
-        }
-
-        private string? Decrypt(string? encryptedText) {
-            if (string.IsNullOrEmpty(encryptedText))
-                return null;
-
-            var data = Convert.FromBase64String(encryptedText);
-            var iv = data.Take(12).ToArray();
-            var cipherText = data.Skip(12).ToArray();
-
-            var cipher = Cipher.GetInstance("AES/GCM/NoPadding")!;
-            var key = GetKey();
-            cipher.Init(CipherMode.DecryptMode, key, new GCMParameterSpec(128, iv));
-
-            return Encoding.UTF8.GetString(cipher.DoFinal(cipherText));
-        }
-
-        private IKey GetKey() {
-            var ks = KeyStore.GetInstance("AndroidKeyStore")!;
-            ks.Load(null);
-
-            var entry = ks.GetEntry(KeyAlias, null) as KeyStore.SecretKeyEntry;
-            if (entry == null)
-                throw new InvalidOperationException("Keystore entry not found or invalid");
-
-            return entry.SecretKey;
         }
     }
 }
