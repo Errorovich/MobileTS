@@ -15,22 +15,35 @@ using TSLib.Scheduler;
 
 namespace MobileTS {
     internal static class Client {
-        public static TsFullClient? Instance { get => client; }
+        public static TsFullClient? Instance => client;
         public static event Action<TsFullClient>? OnInstanceReady;
-        public static event Action<VoiceActivationTrackerPipe.ClientVoiceStatus> OnClientIsTalkingChanged {
-            add => voiceActivationTrackerPipe.OnClientIsTalkingChanged += value;
-            remove => voiceActivationTrackerPipe.OnClientIsTalkingChanged -= value;
-        }
 
-        private static IdentityData identity;
-        private static Thread clientThread;
-        private static TsFullClient client;
-        private static ContextWrapper context;
-        private static VoiceActivationTrackerPipe voiceActivationTrackerPipe;
-        private static DedicatedTaskScheduler clientScheduler;
+        /// <summary>
+        /// Срабатывает, когда клиент начинает/прекращает говорить. Подписка живёт между
+        /// переподключениями: каждый новый конвейер пробрасывает события сюда.
+        /// </summary>
+        public static event Action<VoiceActivationTrackerPipe.ClientVoiceStatus>? OnClientIsTalkingChanged;
+
+        private static IdentityData? identity;
+        private static bool initialized;
+
+        private static Thread? clientThread;
+        private static TsFullClient? client;
+        private static ContextWrapper? context;
+        private static DedicatedTaskScheduler? clientScheduler;
+
+        // Сегменты аудиоконвейера, которые нужно освобождать при дисконнекте.
+        private static AudioRecordPipe? audioRecordPipe;
+        private static AudioTrackPipe? audioTrackPipe;
+        private static VoiceActivationTrackerPipe? voiceActivationTrackerPipe;
+
         public static void Init(ContextWrapper contextWrapper) {
+            // Init вызывается и из ServersListActivity, и из ClientService — выполняем только один раз.
+            if (initialized)
+                return;
+            initialized = true;
+
             context = contextWrapper;
-            //identity = TsCrypt.GenerateNewIdentity();
 
             ISharedPreferences? sharedPreferences = context.GetSharedPreferences("ts_client", FileCreationMode.Private);
 
@@ -52,14 +65,14 @@ namespace MobileTS {
                 }
             }
 
-            var audioManager = (AudioManager)context.GetSystemService("audio");
-
-            var result = audioManager.RequestAudioFocus(
-                null,
-                Android.Media.Stream.Music,
-                AudioFocus.Gain);
+            var audioManager = (AudioManager?)context.GetSystemService(Context.AudioService);
+            audioManager?.RequestAudioFocus(null, Android.Media.Stream.Music, AudioFocus.Gain);
         }
 
+        /// <summary>
+        /// Вызывает <paramref name="action"/> сразу, если клиент уже создан, иначе — один раз
+        /// при готовности экземпляра.
+        /// </summary>
         public static void SubscribeInstance(Action<TsFullClient> action) {
             if (Instance != null) {
                 action(Instance);
@@ -67,23 +80,23 @@ namespace MobileTS {
             }
 
             void Handler(TsFullClient instance) {
-                action(instance);
                 OnInstanceReady -= Handler;
+                action(instance);
             }
 
             OnInstanceReady += Handler;
         }
 
-        public static void UnsubscribeInstance(Action<TsFullClient> action) {
-            if (Instance != null) {
-                action(Instance);
-                return;
-            }
-        }
-
         public static void Connect(ServerInfo serverInfo) => Connect(serverInfo.Address, serverInfo.Nickname, serverInfo.ServerPassword, serverInfo.DefaultChannel, serverInfo.DefaultChannelPassword);
 
         public static void Connect(string address, string? nickname = null, string? serverPassword = null, string? defaultChannel = null, string? defaultChannelPassword = null) {
+            // Защита от повторного подключения поверх живого соединения (утечка потока/микрофона).
+            if (client != null || clientThread != null)
+                return;
+
+            if (identity == null)
+                return;
+
             ConnectionDataFull conData = new ConnectionDataFull(
                 address,
                 identity,
@@ -93,61 +106,114 @@ namespace MobileTS {
                 defaultChannel,
                 defaultChannelPassword == null ? Password.Empty : Password.FromPlain(defaultChannelPassword));
             clientThread = new Thread(() => {
-                DedicatedTaskScheduler.FromCurrentThread(() => ClientThread(conData));
+                // ClientThread — async; продолжения после await пампятся тем же планировщиком в DoWork.
+                DedicatedTaskScheduler.FromCurrentThread(() => _ = ClientThread(conData));
             });
             clientThread.Start();
         }
 
-        private static async void ClientThread(ConnectionDataFull conData) {
+        private static async Task ClientThread(ConnectionDataFull conData) {
             clientScheduler = (DedicatedTaskScheduler)TaskScheduler.Current;
-            client = new TsFullClient(clientScheduler);
-            OnInstanceReady?.Invoke(client);
+            var localClient = new TsFullClient(clientScheduler);
+            client = localClient;
 
-            AudioRecordPipe audioRecordPipe = new AudioRecordPipe();
-            PreciseTimedPipe preciseTimedPipe = audioRecordPipe.Into(new PreciseTimedPipe(new SampleInfo(48000, 1, 16), TSLib.Helper.Id.Null));
+            audioRecordPipe = new AudioRecordPipe();
+            PreciseTimedPipe preciseTimedPipe = audioRecordPipe.Into(new PreciseTimedPipe(new SampleInfo(SampleRate, 1, 16), TSLib.Helper.Id.Null));
             EncoderPipe encoderPipe = preciseTimedPipe.Chain(new EncoderPipe(Codec.OpusVoice));
-            encoderPipe.Chain(client);
+            encoderPipe.Chain(localClient);
 
-            DecoderPipe decoderPipe = client.Chain(new DecoderPipe());
+            DecoderPipe decoderPipe = localClient.Chain(new DecoderPipe());
             voiceActivationTrackerPipe = decoderPipe.Chain(new VoiceActivationTrackerPipe());
-            AudioTrackPipe audioTrackPipe = voiceActivationTrackerPipe.Chain(new AudioTrackPipe());
+            audioTrackPipe = voiceActivationTrackerPipe.Chain(new AudioTrackPipe());
 
-            preciseTimedPipe.ReadBufferSize = 960 * 2;
+            // Пробрасываем события говорения через статическое событие Client, чтобы подписки
+            // не терялись при пересоздании конвейера.
+            voiceActivationTrackerPipe.OnClientIsTalkingChanged += status => OnClientIsTalkingChanged?.Invoke(status);
+
+            preciseTimedPipe.ReadBufferSize = FrameSize * 2;
             preciseTimedPipe.Paused = false;
-            await client.Connect(conData);
+
+            OnInstanceReady?.Invoke(localClient);
+
+            try {
+                await localClient.Connect(conData);
+            }
+            catch {
+                // Ошибка установления соединения; статус уйдёт через OnStatusChangedEvent,
+                // ресурсы освободит Disconnect.
+            }
         }
 
         public static Task<(bool ok, T[] data)> Invoke<T>(Func<TsFullClient, Task<R<T[], CommandError>>> action) {
-            if (client == null || clientScheduler == null)
+            var c = client;
+            var scheduler = clientScheduler;
+            if (c == null || scheduler == null)
                 return Task.FromResult<(bool, T[])>((false, Array.Empty<T>()));
 
-            return clientScheduler.InvokeAsync(async () =>
+            return scheduler.InvokeAsync(async () =>
             {
-                var resp = await action(client);
+                var resp = await action(c);
                 bool ok = resp.GetOk(out T[]? data);
                 return (ok, data ?? Array.Empty<T>());
             });
         }
 
         public static Task<bool> Invoke(Func<TsFullClient, Task<E<CommandError>>> action) {
-            if (client == null || clientScheduler == null)
+            var c = client;
+            var scheduler = clientScheduler;
+            if (c == null || scheduler == null)
                 return Task.FromResult(false);
 
-            return clientScheduler.InvokeAsync(async () =>
-                (await action(client)).GetOk(out _)
+            return scheduler.InvokeAsync(async () =>
+                (await action(c)).GetOk(out _)
             );
         }
 
         public static Task Invoke(Func<TsFullClient, Task> action) {
-            if (client == null || clientScheduler == null)
-                return Task.FromResult(false);
+            var c = client;
+            var scheduler = clientScheduler;
+            if (c == null || scheduler == null)
+                return Task.CompletedTask;
 
-            return clientScheduler.InvokeAsync(async () =>
-                await action(client)
+            return scheduler.InvokeAsync(async () =>
+                await action(c)
             );
         }
 
-        public static Task Disconnect() =>
-            Invoke(c => c.Disconnect());
+        /// <summary>
+        /// Корректно завершает соединение: graceful-дисконнект, остановка микрофона,
+        /// освобождение аудиотреков, завершение выделенного потока планировщика.
+        /// </summary>
+        public static async Task Disconnect() {
+            var c = client;
+            var scheduler = clientScheduler;
+
+            if (c != null && scheduler != null) {
+                try {
+                    await scheduler.InvokeAsync(() => c.Disconnect());
+                }
+                catch {
+                    // игнорируем — всё равно освобождаем ресурсы ниже
+                }
+                c.Dispose();
+            }
+
+            audioRecordPipe?.Dispose();
+            audioTrackPipe?.Dispose();
+
+            // Завершает цикл DoWork выделенного потока, созданного через FromCurrentThread.
+            scheduler?.Dispose();
+
+            client = null;
+            clientScheduler = null;
+            clientThread = null;
+            audioRecordPipe = null;
+            audioTrackPipe = null;
+            voiceActivationTrackerPipe = null;
+            OnInstanceReady = null;
+        }
+
+        private const int SampleRate = 48000;
+        private const int FrameSize = 960;
     }
 }

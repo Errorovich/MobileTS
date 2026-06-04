@@ -1,9 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Java.Lang;
 using TSLib;
 using TSLib.Audio;
 
@@ -17,18 +13,22 @@ namespace MobileTS.Audio
 
         public event Action<ClientVoiceStatus>? OnClientIsTalkingChanged;
 
-        private Dictionary<ClientId, bool> isTalking = new();
+        private readonly Dictionary<ClientId, bool> isTalking = new();
 
         public void Write(Span<byte> data, Meta? meta)
         {
-            bool active = data != Span<byte>.Empty;
-            if (!isTalking.TryGetValue(meta.In.Sender, out bool lastActive)) {
-                isTalking.Add(meta.In.Sender, active);
+            if (meta is null)
+                return;
+
+            var sender = meta.In.Sender;
+            bool active = data.Length != 0;
+            if (!isTalking.TryGetValue(sender, out bool lastActive)) {
+                isTalking.Add(sender, active);
             }
-            else if(lastActive != active)
+            else if (lastActive != active)
             {
-                isTalking[meta.In.Sender] = active;
-                OnClientIsTalkingChanged?.Invoke(new ClientVoiceStatus(meta.In.Sender, active));
+                isTalking[sender] = active;
+                OnClientIsTalkingChanged?.Invoke(new ClientVoiceStatus(sender, active));
             }
 
             OutStream?.Write(data, meta);

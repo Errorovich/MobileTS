@@ -1,12 +1,11 @@
-﻿using Android.Content;
-using Android.Views;
+using Android.Content;
 using AndroidX.RecyclerView.Widget;
 using System.Text.Json;
-using static TSLib.Full.TsFullClient;
+using MobileTS.Activity.Server;
 
-namespace MobileTS {
+namespace MobileTS.Activity.ServersList {
     [Activity(Label = "Серверы", MainLauncher = true)]
-    public class ServersActivity : Activity {
+    public partial class ServersListActivity : Android.App.Activity {
         private const string PrefsName = "servers_storage";
         private const string ServersKey = "servers";
 
@@ -51,10 +50,6 @@ namespace MobileTS {
                     _servers.AddRange(list);
                 }
             }
-        }
-
-        protected override void OnDestroy() {
-            base.OnDestroy();
         }
 
         // ================= DIALOG =================
@@ -109,89 +104,6 @@ namespace MobileTS {
             };
 
             dialog.Show();
-        }
-
-        // ================= ADAPTER =================
-
-        private class ServerAdapter : RecyclerView.Adapter {
-            private readonly List<ServerInfo> _items;
-            private readonly ServersActivity _activity;
-
-            public ServerAdapter(List<ServerInfo> items, ServersActivity activity) {
-                _items = items;
-                _activity = activity;
-            }
-
-            public override int ItemCount => _items.Count;
-
-            public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType) {
-                var view = LayoutInflater.From(parent.Context)!
-                    .Inflate(Resource.Layout.item_server, parent, false);
-                return new ServerViewHolder(view);
-            }
-
-            public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-                var vh = (ServerViewHolder)holder;
-                var server = _items[position];
-
-                vh.Address.Text = server.Address;
-                vh.User.Text = $"User: {server.Nickname}";
-                vh.Channel.Text = $"Channel: {server.DefaultChannel}";
-
-                vh.ItemView.Click += (_, _) => {
-                    // Передаем весь объект в сервис, пароли остаются зашифрованными
-                    Intent clientServiceIntent = new Intent(_activity, typeof(ClientService));
-                    clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server));
-                    _activity.StartService(clientServiceIntent);
-
-                    // Показываем ProgressDialog
-                    var progress = new ProgressDialog(_activity);
-                    progress.SetMessage("Подключение...");
-                    progress.SetCancelable(false);
-                    progress.Show();
-
-                    // Подписка на статус через SubscribeInstance
-                    Client.SubscribeInstance(c => {
-                        void StatusChanged(object? sender, TsClientStatus status) {
-                            _activity.RunOnUiThread(() => {
-                                if (status == TsClientStatus.Connected) {
-                                    progress.Dismiss();
-                                    _activity.StartActivity(new Intent(_activity, typeof(ServerActivity)));
-                                }
-                                else if (status == TsClientStatus.Disconnected) {
-                                    progress.Dismiss();
-                                }
-                            });
-                        }
-
-                        c.OnStatusChangedEvent += StatusChanged;
-                    });
-                };
-
-                vh.Edit.Click += (_, _) => _activity.ShowServerDialog(server);
-
-                vh.Delete.Click += (_, _) => {
-                    _items.RemoveAt(position);
-                    NotifyItemRemoved(position);
-                    _activity.SaveServers();
-                };
-            }
-        }
-
-        private class ServerViewHolder : RecyclerView.ViewHolder {
-            public TextView Address { get; }
-            public TextView User { get; }
-            public TextView Channel { get; }
-            public Button Edit { get; }
-            public Button Delete { get; }
-
-            public ServerViewHolder(View itemView) : base(itemView) {
-                Address = itemView.FindViewById<TextView>(Resource.Id.txtAddress)!;
-                User = itemView.FindViewById<TextView>(Resource.Id.txtUser)!;
-                Channel = itemView.FindViewById<TextView>(Resource.Id.txtChannel)!;
-                Edit = itemView.FindViewById<Button>(Resource.Id.btnEdit)!;
-                Delete = itemView.FindViewById<Button>(Resource.Id.btnDelete)!;
-            }
         }
     }
 }

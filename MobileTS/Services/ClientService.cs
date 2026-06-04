@@ -1,11 +1,10 @@
-﻿using Android.App;
+using Android.App;
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using System.Text.Json;
-using System.Threading.Tasks;
 
-namespace MobileTS {
+namespace MobileTS.Services {
     [Service(ForegroundServiceType = ForegroundService.TypeMicrophone)]
     public class ClientService : Service {
         public override void OnCreate() {
@@ -14,8 +13,9 @@ namespace MobileTS {
             StartForeground(1, BuildNotification());
         }
 
-        public override StartCommandResult OnStartCommand(Intent intent, StartCommandFlags flags, int startId) {
-            var json = intent.GetStringExtra("server_info");
+        public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId) {
+            // intent == null при пересоздании сервиса системой (Sticky) — подключаться нечем.
+            var json = intent?.GetStringExtra("server_info");
             if (json != null) {
                 var server = JsonSerializer.Deserialize<ServerInfo>(json)!;
 
@@ -41,7 +41,7 @@ namespace MobileTS {
             base.OnDestroy();
         }
 
-        public override IBinder? OnBind(Intent intent) => null;
+        public override IBinder? OnBind(Intent? intent) => null;
 
         private Notification BuildNotification() {
             const string channelId = "ts_service_channel";

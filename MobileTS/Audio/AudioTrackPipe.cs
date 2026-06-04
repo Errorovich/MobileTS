@@ -4,19 +4,24 @@ using TSLib.Audio;
 
 namespace MobileTS.Audio
 {
-    public class AudioTrackPipe : IAudioPassiveConsumer
+    public class AudioTrackPipe : IAudioPassiveConsumer, IDisposable
     {
         private static readonly AudioAttributes audioAttributes = new AudioAttributes.Builder()
-            .SetUsage(AudioUsageKind.Media)
-            .SetContentType(AudioContentType.Speech)
-            .Build();
+            .SetUsage(AudioUsageKind.Media)!
+            .SetContentType(AudioContentType.Speech)!
+            .Build()!;
         private static readonly AudioFormat audioFormat = new AudioFormat.Builder()
                 .SetEncoding(Encoding.Pcm16bit)!
-                .SetSampleRate(48000)
+                .SetSampleRate(48000)!
                 .SetChannelMask(ChannelOut.Stereo)
-                .Build();
+                .Build()!;
 
         private readonly Dictionary<ClientId, AudioTrack> audioTracks = new();
+
+        // Переиспользуемый буфер для маршалинга в AudioTrack.Write, чтобы не аллоцировать
+        // новый массив на каждом аудиокадре (горячий путь воспроизведения).
+        private byte[] writeBuffer = Array.Empty<byte>();
+
         public AudioTrackPipe() { }
 
         public bool Active => true;
@@ -27,7 +32,13 @@ namespace MobileTS.Audio
                 return;
 
             var audioTrack = GetAudioTrack(meta.In.Sender);
-            audioTrack.Write(data.ToArray(), 0, data.Length);
+
+            // Растим буфер только при необходимости; Opus-кадры фикс. размера → аллокация один раз.
+            if (writeBuffer.Length < data.Length)
+                writeBuffer = new byte[data.Length];
+
+            data.CopyTo(writeBuffer);
+            audioTrack.Write(writeBuffer, 0, data.Length);
         }
 
         private AudioTrack GetAudioTrack(ClientId clientId)
@@ -44,6 +55,17 @@ namespace MobileTS.Audio
             audioTracks.Add(clientId, audioTrack);
             audioTrack.Play();
             return audioTrack;
+        }
+
+        public void Dispose()
+        {
+            foreach (var audioTrack in audioTracks.Values)
+            {
+                audioTrack.Stop();
+                audioTrack.Release();
+                audioTrack.Dispose();
+            }
+            audioTracks.Clear();
         }
     }
 }
