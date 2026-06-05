@@ -24,8 +24,19 @@ namespace MobileTS {
         /// </summary>
         public static event Action<VoiceActivationTrackerPipe.ClientVoiceStatus>? OnClientIsTalkingChanged;
 
+        /// <summary>
+        /// Срабатывает на потоке планировщика, когда в <see cref="TsFullClient.Book"/> изменилось
+        /// дерево каналов/клиентов (зашёл/вышел/переместился клиент, изменился канал и т.п.).
+        /// UI должен пересобрать список через <see cref="GetBookSnapshot"/>.
+        /// </summary>
+        public static event Action? OnBookChanged;
+
         private static IdentityData? identity;
         private static bool initialized;
+
+        // Настоящее имя сервера из initserver. Не берём из Book.Server.Name: генерируемый
+        // UpdateInitServer перезатирает его ником клиента (полем Name поверх ServerName).
+        private static string? serverName;
 
         private static Thread? clientThread;
         private static TsFullClient? client;
@@ -34,6 +45,7 @@ namespace MobileTS {
 
         // Сегменты аудиоконвейера, которые нужно освобождать при дисконнекте.
         private static AudioRecordPipe? audioRecordPipe;
+        private static PreciseTimedPipe? preciseTimedPipe;
         private static AudioTrackPipe? audioTrackPipe;
         private static VoiceActivationTrackerPipe? voiceActivationTrackerPipe;
 
@@ -50,11 +62,13 @@ namespace MobileTS {
             if (sharedPreferences == null)
                 return;
 
+            // Грузим сохранённую identity только если есть и приватный ключ, и его offset.
+            // Иначе (первый запуск либо повреждённые данные) генерируем новую и сохраняем.
             string? privateKey = sharedPreferences.GetString("ts_private_key", null);
-            if (privateKey == null)
-                return;
-            if (ulong.TryParse(sharedPreferences.GetString("ts_key_offset", null), out ulong keyOffset))
+            if (privateKey != null
+                && ulong.TryParse(sharedPreferences.GetString("ts_key_offset", null), out ulong keyOffset)) {
                 identity = TsCrypt.LoadIdentity(privateKey, keyOffset).Value;
+            }
             else {
                 identity = TsCrypt.GenerateNewIdentity();
                 ISharedPreferencesEditor? editor = sharedPreferences.Edit();
@@ -118,7 +132,7 @@ namespace MobileTS {
             client = localClient;
 
             audioRecordPipe = new AudioRecordPipe();
-            PreciseTimedPipe preciseTimedPipe = audioRecordPipe.Into(new PreciseTimedPipe(new SampleInfo(SampleRate, 1, 16), TSLib.Helper.Id.Null));
+            preciseTimedPipe = audioRecordPipe.Into(new PreciseTimedPipe(new SampleInfo(SampleRate, 1, 16), TSLib.Helper.Id.Null));
             EncoderPipe encoderPipe = preciseTimedPipe.Chain(new EncoderPipe(Codec.OpusVoice));
             encoderPipe.Chain(localClient);
 
@@ -129,6 +143,24 @@ namespace MobileTS {
             // Пробрасываем события говорения через статическое событие Client, чтобы подписки
             // не терялись при пересоздании конвейера.
             voiceActivationTrackerPipe.OnClientIsTalkingChanged += status => OnClientIsTalkingChanged?.Invoke(status);
+
+            // Любое изменение дерева каналов/клиентов в Book — сигналим UI. Подписываемся на
+            // OnEach*, т.к. Book обновляется ровно перед ними (батч-события On* идут до апдейта).
+            static void RaiseBookChanged<T>(object? sender, T e) => OnBookChanged?.Invoke();
+            localClient.OnEachChannelListFinished += RaiseBookChanged;
+            localClient.OnEachClientEnterView += RaiseBookChanged;
+            localClient.OnEachClientLeftView += RaiseBookChanged;
+            localClient.OnEachClientMoved += RaiseBookChanged;
+            localClient.OnEachChannelCreated += RaiseBookChanged;
+            localClient.OnEachChannelDeleted += RaiseBookChanged;
+            localClient.OnEachChannelEdited += RaiseBookChanged;
+            localClient.OnEachChannelMoved += RaiseBookChanged;
+
+            // Имя сервера берём из initserver напрямую (ServerName), т.к. в Book оно затирается ником.
+            localClient.OnEachInitServer += (sender, e) => {
+                serverName = e.ServerName;
+                OnBookChanged?.Invoke();
+            };
 
             preciseTimedPipe.ReadBufferSize = FrameSize * 2;
             preciseTimedPipe.Paused = false;
@@ -142,6 +174,24 @@ namespace MobileTS {
                 // Ошибка установления соединения; статус уйдёт через OnStatusChangedEvent,
                 // ресурсы освободит Disconnect.
             }
+        }
+
+        /// <summary>
+        /// Снимок дерева сервера из <see cref="TsFullClient.Book"/>. Полный клиент не отвечает на
+        /// server-query команды (channellist/clientlist) — состояние строится из нотификаций в Book,
+        /// читать который нужно на потоке планировщика.
+        /// </summary>
+        public static Task<(string serverName, TSLib.Full.Book.Channel[] channels, TSLib.Full.Book.Client[] clients)> GetBookSnapshot() {
+            var c = client;
+            var scheduler = clientScheduler;
+            if (c == null || scheduler == null)
+                return Task.FromResult(("", Array.Empty<TSLib.Full.Book.Channel>(), Array.Empty<TSLib.Full.Book.Client>()));
+
+            return scheduler.Invoke(() => (
+                serverName ?? "",
+                c.Book.Channels.Values.ToArray(),
+                c.Book.Clients.Values.ToArray()
+            ));
         }
 
         public static Task<(bool ok, T[] data)> Invoke<T>(Func<TsFullClient, Task<R<T[], CommandError>>> action) {
@@ -188,6 +238,12 @@ namespace MobileTS {
             var c = client;
             var scheduler = clientScheduler;
 
+            // Сначала останавливаем поток захвата (Dispose делает Join таймер-потока), затем сразу
+            // освобождаем микрофон — до (возможно долгого) дисконнекта клиента, иначе AudioRecord
+            // остаётся захваченным и системный индикатор микрофона продолжает гореть.
+            preciseTimedPipe?.Dispose();
+            audioRecordPipe?.Dispose();
+
             if (c != null && scheduler != null) {
                 try {
                     await scheduler.InvokeAsync(() => c.Disconnect());
@@ -198,7 +254,8 @@ namespace MobileTS {
                 c.Dispose();
             }
 
-            audioRecordPipe?.Dispose();
+            // Трек воспроизведения освобождаем после дисконнекта: клиент мог дописывать
+            // декодированный звук в конвейер вплоть до завершения соединения.
             audioTrackPipe?.Dispose();
 
             // Завершает цикл DoWork выделенного потока, созданного через FromCurrentThread.
@@ -207,7 +264,9 @@ namespace MobileTS {
             client = null;
             clientScheduler = null;
             clientThread = null;
+            serverName = null;
             audioRecordPipe = null;
+            preciseTimedPipe = null;
             audioTrackPipe = null;
             voiceActivationTrackerPipe = null;
             OnInstanceReady = null;

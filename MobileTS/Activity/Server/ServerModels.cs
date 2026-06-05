@@ -1,4 +1,5 @@
-using TSLib.Messages;
+using BookChannel = TSLib.Full.Book.Channel;
+using BookClient = TSLib.Full.Book.Client;
 
 namespace MobileTS.Activity.Server {
     public partial class ServerActivity {
@@ -12,9 +13,9 @@ namespace MobileTS.Activity.Server {
         }
 
         public sealed class ChannelItem : ListItem {
-            public ChannelListResponse Channel { get; }
+            public BookChannel Channel { get; }
 
-            public ChannelItem(ChannelListResponse channel) {
+            public ChannelItem(BookChannel channel) {
                 Channel = channel;
             }
 
@@ -22,10 +23,10 @@ namespace MobileTS.Activity.Server {
         }
 
         public sealed class ClientItem : ListItem {
-            public ClientList Client { get; }
+            public BookClient Client { get; }
             public bool IsTalking { get; set; }
 
-            public ClientItem(ClientList client) {
+            public ClientItem(BookClient client) {
                 Client = client;
             }
 

@@ -37,6 +37,9 @@ namespace MobileTS.Services {
         }
 
         public override void OnDestroy() {
+            // Снимаем foreground-состояние (и его уведомление/индикатор микрофона) сразу,
+            // не дожидаясь завершения асинхронного Disconnect.
+            StopForeground(StopForegroundFlags.Remove);
             _ = Client.Disconnect();
             base.OnDestroy();
         }

@@ -1,16 +1,23 @@
 using Android.Content;
+using Android.Content.PM;
 using AndroidX.RecyclerView.Widget;
 using System.Text.Json;
 using MobileTS.Activity.Server;
+using MobileTS.Services;
+using static TSLib.Full.TsFullClient;
 
 namespace MobileTS.Activity.ServersList {
     [Activity(Label = "Серверы", MainLauncher = true)]
     public partial class ServersListActivity : Android.App.Activity {
         private const string PrefsName = "servers_storage";
         private const string ServersKey = "servers";
+        private const int RecordAudioRequestCode = 1;
 
         private readonly List<ServerInfo> _servers = new();
         private ServerAdapter? _adapter;
+
+        // Сервер, к которому подключаемся, как только пользователь выдаст RECORD_AUDIO.
+        private ServerInfo? _pendingConnectServer;
 
         protected override void OnCreate(Bundle? savedInstanceState) {
             base.OnCreate(savedInstanceState);
@@ -30,6 +37,69 @@ namespace MobileTS.Activity.ServersList {
             _adapter.NotifyDataSetChanged();
 
             FindViewById<Button>(Resource.Id.btnAdd)!.Click += (_, _) => ShowServerDialog();
+        }
+
+        // ================= CONNECT =================
+
+        // Подключение запускает FGS типа microphone, что требует выданного RECORD_AUDIO.
+        // Если разрешения ещё нет — запоминаем сервер и запрашиваем; продолжаем в колбэке.
+        public void ConnectToServer(ServerInfo server) {
+            if (CheckSelfPermission(Android.Manifest.Permission.RecordAudio) != Permission.Granted) {
+                _pendingConnectServer = server;
+                RequestPermissions([Android.Manifest.Permission.RecordAudio], RecordAudioRequestCode);
+                return;
+            }
+
+            StartConnection(server);
+        }
+
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults) {
+            base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
+
+            if (requestCode != RecordAudioRequestCode)
+                return;
+
+            var server = _pendingConnectServer;
+            _pendingConnectServer = null;
+
+            if (server != null && grantResults.Length > 0 && grantResults[0] == Permission.Granted)
+                StartConnection(server);
+            else
+                Toast.MakeText(this, "Нет доступа к микрофону — подключение невозможно", ToastLength.Long)?.Show();
+        }
+
+        private void StartConnection(ServerInfo server) {
+            // Передаем весь объект в сервис, пароли остаются зашифрованными
+            var clientServiceIntent = new Intent(this, typeof(ClientService));
+            clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server));
+            StartService(clientServiceIntent);
+
+            var progress = new ProgressDialog(this);
+            progress.SetMessage("Подключение...");
+            progress.SetCancelable(false);
+            progress.Show();
+
+            Client.SubscribeInstance(c => {
+                void StatusChanged(object? sender, TsClientStatus status) {
+                    if (status != TsClientStatus.Connected && status != TsClientStatus.Disconnected)
+                        return;
+
+                    // Терминальный статус — снимаем подписку, иначе обработчики копятся.
+                    c.OnStatusChangedEvent -= StatusChanged;
+
+                    RunOnUiThread(() => {
+                        progress.Dismiss();
+                        if (status == TsClientStatus.Connected) {
+                            var intent = new Intent(this, typeof(ServerActivity));
+                            // Имя для заголовка ActionBar, пока не загрузится настоящее из Book.
+                            intent.PutExtra("server_title", server.Address);
+                            StartActivity(intent);
+                        }
+                    });
+                }
+
+                c.OnStatusChangedEvent += StatusChanged;
+            });
         }
 
         // ================= STORAGE =================

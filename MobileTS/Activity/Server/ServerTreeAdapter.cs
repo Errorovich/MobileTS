@@ -43,7 +43,7 @@ namespace MobileTS.Activity.Server {
                     vh.Name.SetTextColor(
                         clientItem.IsTalking
                             ? Color.Rgb(0, 160, 0)
-                            : Color.White
+                            : Color.Black
                     );
                 }
             }

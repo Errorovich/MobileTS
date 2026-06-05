@@ -1,10 +1,5 @@
-using Android.Content;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
-using System.Text.Json;
-using MobileTS.Activity.Server;
-using MobileTS.Services;
-using static TSLib.Full.TsFullClient;
 
 namespace MobileTS.Activity.ServersList {
     public partial class ServersListActivity {
@@ -29,7 +24,7 @@ namespace MobileTS.Activity.ServersList {
                 vh.ItemView.Click += (_, _) => {
                     var server = ItemAt(vh);
                     if (server != null)
-                        Connect(server);
+                        _activity.ConnectToServer(server);
                 };
                 vh.Edit.Click += (_, _) => {
                     var server = ItemAt(vh);
@@ -60,36 +55,6 @@ namespace MobileTS.Activity.ServersList {
             private ServerInfo? ItemAt(RecyclerView.ViewHolder holder) {
                 var pos = holder.BindingAdapterPosition;
                 return pos == RecyclerView.NoPosition ? null : _items[pos];
-            }
-
-            private void Connect(ServerInfo server) {
-                // Передаем весь объект в сервис, пароли остаются зашифрованными
-                var clientServiceIntent = new Intent(_activity, typeof(ClientService));
-                clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server));
-                _activity.StartService(clientServiceIntent);
-
-                var progress = new ProgressDialog(_activity);
-                progress.SetMessage("Подключение...");
-                progress.SetCancelable(false);
-                progress.Show();
-
-                Client.SubscribeInstance(c => {
-                    void StatusChanged(object? sender, TsClientStatus status) {
-                        if (status != TsClientStatus.Connected && status != TsClientStatus.Disconnected)
-                            return;
-
-                        // Терминальный статус — снимаем подписку, иначе обработчики копятся.
-                        c.OnStatusChangedEvent -= StatusChanged;
-
-                        _activity.RunOnUiThread(() => {
-                            progress.Dismiss();
-                            if (status == TsClientStatus.Connected)
-                                _activity.StartActivity(new Intent(_activity, typeof(ServerActivity)));
-                        });
-                    }
-
-                    c.OnStatusChangedEvent += StatusChanged;
-                });
             }
         }
     }
