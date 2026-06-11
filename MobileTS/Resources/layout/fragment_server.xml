@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ActionBar предоставляет хост-активити, поэтому здесь только содержимое экрана сервера. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Контент: дерево каналов ИЛИ чат текущего канала (переключаются кнопкой в нижней панели). -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FFFFFF" />
+
+        <!-- Чат текущего канала (по умолчанию скрыт). -->
+        <LinearLayout
+            android:id="@+id/chatContainer"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FFFFFF"
+            android:visibility="gone">
+
+            <!-- §7: карточка текущего канала (наполняется программно). -->
+            <FrameLayout
+                android:id="@+id/chatChannelCardHolder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/chatRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:background="#F0F0F0"
+                android:padding="6dp">
+
+                <EditText
+                    android:id="@+id/txtChatInput"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Сообщение в канал"
+                    android:inputType="textShortMessage|textMultiLine"
+                    android:maxLines="4" />
+
+                <ImageButton
+                    android:id="@+id/btnSend"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:src="@drawable/ic_send"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:contentDescription="Отправить" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- §6: компактная нижняя панель в одну строку:
+         [широкая кнопка (микрофон/говорить)] [переключение вида] [три точки]. -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:background="#F0F0F0"
+        android:padding="6dp">
+
+        <Button
+            android:id="@+id/btnPrimary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Микрофон: вкл" />
+
+        <ImageButton
+            android:id="@+id/btnViewToggle"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:src="@drawable/ic_chat"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="Переключить вид" />
+
+        <ImageButton
+            android:id="@+id/btnMore"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:src="@drawable/ic_more"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="Ещё" />
+    </LinearLayout>
+</LinearLayout>

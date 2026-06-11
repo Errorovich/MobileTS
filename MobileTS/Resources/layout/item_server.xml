@@ -1,50 +1,225 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
-    android:padding="8dp"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:layout_marginLeft="8dp"
+    android:layout_marginRight="8dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginBottom="6dp"
+    android:background="@drawable/bg_card"
+    android:padding="4dp">
 
-    <TextView
-        android:id="@+id/txtAddress"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Server Address"
-        android:textSize="16sp"
-        android:textStyle="bold"/>
-
-    <TextView
-        android:id="@+id/txtUser"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="User: "
-        android:textSize="14sp"/>
-
-    <TextView
-        android:id="@+id/txtChannel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Channel: "
-        android:textSize="14sp"/>
-
+    <!-- Шапка строки: имя сервера (тап — подключиться) и треугольник раскрытия справа. -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="end"
-        android:paddingTop="4dp">
+        android:gravity="center_vertical">
 
-        <Button
-            android:id="@+id/btnEdit"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Edit" />
+        <ImageView
+            android:id="@+id/imgServerIcon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="8dp"
+            android:visibility="gone"
+            android:contentDescription="@null" />
 
-        <Button
-            android:id="@+id/btnDelete"
-            android:layout_width="wrap_content"
+        <TextView
+            android:id="@+id/txtTitle"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Delete"
-            android:layout_marginStart="8dp"/>
+            android:layout_weight="1"
+            android:padding="12dp"
+            android:text="Server"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#202020"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <ImageButton
+            android:id="@+id/btnExpand"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_expand"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Развернуть" />
+    </LinearLayout>
+
+    <!-- Раскрываемая карточка с данными сервера. -->
+    <LinearLayout
+        android:id="@+id/cardBody"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="8dp">
+
+        <!-- Псевдоним -->
+        <LinearLayout
+            android:id="@+id/rowAlias"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <TextView
+                style="@style/CardFieldLabel"
+                android:text="Псевдоним" />
+            <EditText
+                android:id="@+id/txtAlias"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Псевдоним"
+                android:inputType="text" />
+        </LinearLayout>
+
+        <!-- Адрес -->
+        <LinearLayout
+            android:id="@+id/rowAddress"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <TextView
+                style="@style/CardFieldLabel"
+                android:text="Адрес" />
+            <EditText
+                android:id="@+id/txtAddress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="IP / адрес"
+                android:inputType="textUri" />
+        </LinearLayout>
+
+        <!-- Никнейм (необязательно) -->
+        <LinearLayout
+            android:id="@+id/rowNickname"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <TextView
+                style="@style/CardFieldLabel"
+                android:text="Никнейм" />
+            <EditText
+                android:id="@+id/txtNickname"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Никнейм (необязательно)"
+                android:inputType="textPersonName" />
+        </LinearLayout>
+
+        <!-- Пароль сервера -->
+        <LinearLayout
+            android:id="@+id/rowServerPassword"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <TextView
+                style="@style/CardFieldLabel"
+                android:text="Пароль сервера" />
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <EditText
+                    android:id="@+id/txtServerPassword"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Пароль сервера"
+                    android:inputType="textPassword" />
+                <ImageButton
+                    android:id="@+id/btnToggleServerPassword"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@drawable/ic_visibility"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Показать пароль" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Канал -->
+        <LinearLayout
+            android:id="@+id/rowChannel"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <TextView
+                style="@style/CardFieldLabel"
+                android:text="Канал по умолчанию" />
+            <EditText
+                android:id="@+id/txtChannel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Канал по умолчанию"
+                android:inputType="text" />
+        </LinearLayout>
+
+        <!-- Пароль канала -->
+        <LinearLayout
+            android:id="@+id/rowChannelPassword"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <TextView
+                style="@style/CardFieldLabel"
+                android:text="Пароль канала" />
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <EditText
+                    android:id="@+id/txtChannelPassword"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Пароль канала"
+                    android:inputType="textPassword" />
+                <ImageButton
+                    android:id="@+id/btnToggleChannelPassword"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@drawable/ic_visibility"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Показать пароль" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Нижняя строка: удалить (слева) и редактировать/сохранить (справа). -->
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
+            <ImageButton
+                android:id="@+id/btnDelete"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_delete"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Удалить" />
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+            <ImageButton
+                android:id="@+id/btnEdit"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_edit"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Редактировать" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

@@ -1,18 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace MobileTS {
     public sealed class ServerInfo {
         /// <summary>
         /// IP или доменное имя сервера (host:port при необходимости)
         /// </summary>
-        public string Address { get; set; }
+        public string Address { get; set; } = "";
 
         /// <summary>
-        /// Ник пользователя
+        /// Псевдоним сервера для отображения в списке (необязательно)
+        /// </summary>
+        public string? Alias { get; set; }
+
+        /// <summary>
+        /// Ник пользователя. Необязателен: если не задан, используется имя из настроек (AppSettings).
         /// </summary>
         public string? Nickname { get; set; }
 
@@ -31,23 +32,16 @@ namespace MobileTS {
         /// </summary>
         public string? DefaultChannelPassword { get; set; }
 
-        public ServerInfo() { }
+        /// <summary>
+        /// Что показывать в заголовке карточки: псевдоним, если задан, иначе адрес.
+        /// </summary>
+        [JsonIgnore]
+        public string DisplayName => string.IsNullOrWhiteSpace(Alias) ? Address : Alias!;
 
-        public ServerInfo(
-            string address,
-            string? nickname,
-            string? serverPassword,
-            string? defaultChannel,
-            string? defaultChannelPassword) {
-            Address = address;
-            Nickname = nickname;
-            ServerPassword = serverPassword;
-            DefaultChannel = defaultChannel;
-            DefaultChannelPassword = defaultChannelPassword;
-        }
+        // Переходное состояние карточки в списке серверов; не сериализуется и не передаётся в сервис.
+        [JsonIgnore] public bool IsExpanded { get; set; }
+        [JsonIgnore] public bool IsEditing { get; set; }
 
-        public override string ToString() {
-            return $"{Address} ({Nickname ?? "no nick"})";
-        }
+        public override string ToString() => DisplayName;
     }
 }

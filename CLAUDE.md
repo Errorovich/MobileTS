@@ -46,15 +46,19 @@ Audio flows through a chain of `IAudioPipe` segments (`.Chain(...)` / `.Into(...
 The MobileTS-specific pipes live in [MobileTS/Audio/](MobileTS/Audio/) and wrap Android APIs:
 - `AudioRecordPipe` — Android `AudioRecord` (mic, 48 kHz mono PCM16) as an `IAudioPassiveProducer`.
 - `AudioTrackPipe` — one Android `AudioTrack` per `ClientId`, routed by `meta.In.Sender`.
-- `VoiceActivationTrackerPipe` — taps the decoded stream to raise `OnClientIsTalkingChanged`, surfaced on `Client.OnClientIsTalkingChanged` and used by `ServerActivity` to color talking clients green.
+- `VoiceActivationTrackerPipe` — taps the decoded stream to raise `OnClientIsTalkingChanged`, surfaced on `Client.OnClientIsTalkingChanged` and used by `ServerFragment` to color talking clients green.
 
 ### Screens & lifecycle
 
-- [ServersActivity.cs](MobileTS/ServersActivity.cs) (`MainLauncher`) — CRUD list of saved servers, persisted as JSON in `SharedPreferences`. Tapping a server starts `ClientService` and navigates to `ServerActivity` once `TsClientStatus.Connected`.
-- [ClientService.cs](MobileTS/ClientSevice.cs) — foreground `Service` (`ForegroundServiceType.Microphone`) that owns the live connection so voice keeps running in the background. The `ServerInfo` is passed via intent extra as JSON; it decrypts passwords and calls `Client.Connect`.
-- [ServerActivity.cs](MobileTS/ServerActivity.cs) — channel/client tree via `RecyclerView` with two view types (`ChannelItem` / `ClientItem`), built from `ChannelList()` + `ClientList()`.
+The UI is **single-Activity + Fragments**: one host owns the navigation drawer + ActionBar so the side menu is shared by every screen and never rebuilds/flickers on navigation (a per-Activity drawer can't persist across Activity transitions). Screens are platform `Android.App.Fragment`s swapped in `content_frame`.
+
+- [MainActivity.cs](MobileTS/Activity/MainActivity.cs) (`MainLauncher`) — host. Owns the `androidx.drawerlayout.widget.DrawerLayout` ([activity_main.xml](MobileTS/Resources/layout/activity_main.xml)) and the ActionBar "☰" home button that opens it. Drawer header lists currently connected server(s) (one for now); items are **Сервера / Настройки / Журнал**. Calls `Client.Init` + `Crypto.EnsureKey`. Navigation helpers: `ShowServersList` (root, clears back stack), `Push` (back-stack), `ShowServer` (after connect), `DisconnectCurrent`, `UpdateConnectedTitle`. The connected-server header survives rotation via `OnSaveInstanceState` (the connection itself lives in `ClientService`).
+- [ServersFragment.cs](MobileTS/Activity/ServersList/ServersFragment.cs) — CRUD list of saved servers (JSON in `SharedPreferences`). Tapping a server requests `RECORD_AUDIO`, starts `ClientService`, shows a cancelable "Подключение..." `ProgressDialog` (back/cancel stops the service → aborts the connect), and on `TsClientStatus.Connected` calls `MainActivity.ShowServer`; on failure shows the disconnect reason.
+- [ClientService.cs](MobileTS/Services/ClientService.cs) — foreground `Service` (`ForegroundServiceType.Microphone`) that owns the live connection so voice keeps running in the background. The `ServerInfo` is passed via intent extra as JSON; it decrypts passwords and calls `Client.Connect`. Stopping the service (`OnDestroy`) calls `Client.Disconnect`.
+- [ServerFragment.cs](MobileTS/Activity/Server/ServerFragment.cs) — channel/client tree via `RecyclerView` with two view types (`ChannelItem` / `ClientItem`), built from `Client.GetBookSnapshot()`. Adds the "Отключиться" item to the host ActionBar; "Назад" returns to the list while staying connected, disconnect is explicit.
+- [SettingsFragment.cs](MobileTS/Activity/Settings/SettingsFragment.cs) / [LogFragment.cs](MobileTS/Activity/Log/LogFragment.cs) — placeholders.
 
 ### Identity & secrets
 
 - TeamSpeak identity (ed25519 private key + key offset) is generated once via `TsCrypt` and stored in `SharedPreferences` (`ts_client`). See `Client.Init`.
-- Server/channel passwords are encrypted at rest with [Crypto.cs](MobileTS/Crypto.cs) using an **AndroidKeyStore** AES/GCM key (`server_password_key`). `Crypto.EnsureKey()` must be called before use; encryption happens in the UI layer, decryption inside `ClientService` right before connecting. Passwords stay encrypted in the JSON passed across the intent boundary.
+- Server/channel passwords are stored **in plaintext** in `SharedPreferences` (`servers_storage`, JSON) and passed as-is across the intent boundary to `ClientService`. This is a deliberate UX trade-off (passwords survive Auto Backup / device migration; `android:allowBackup="true"`) accepted over at-rest encryption — there is intentionally no `Crypto` class. Don't reintroduce encryption without revisiting that decision.

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Карточка канала: шапка (название + стрелка) и тело со списком участников. Аналогично item_server. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginLeft="8dp"
+    android:layout_marginRight="8dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginBottom="6dp"
+    android:background="@drawable/bg_card"
+    android:padding="4dp">
+
+    <!-- Шапка: название канала (тап — войти) + стрелка раскрытия. -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/txtChannelName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:padding="12dp"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#202020"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <ImageButton
+            android:id="@+id/btnExpandChannel"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_expand"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Развернуть" />
+    </LinearLayout>
+
+    <!-- Тело: список участников (строки item_client добавляются программно). -->
+    <LinearLayout
+        android:id="@+id/membersContainer"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</LinearLayout>

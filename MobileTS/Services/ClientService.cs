@@ -19,14 +19,22 @@ namespace MobileTS.Services {
             if (json != null) {
                 var server = JsonSerializer.Deserialize<ServerInfo>(json)!;
 
-                // Расшифровка паролей внутри сервиса
-                var serverPassword = Crypto.Decrypt(server.ServerPassword);
-                var channelPassword = Crypto.Decrypt(server.DefaultChannelPassword);
+                // Пароли хранятся и передаются в открытом виде (без Crypto).
+                var serverPassword = server.ServerPassword;
+                var channelPassword = server.DefaultChannelPassword;
+
+                // Ник: у сервера он необязателен — если не задан, берём имя пользователя из
+                // настроек; если и там пусто — подключаемся как «Guest».
+                var nickname = server.Nickname;
+                if (string.IsNullOrWhiteSpace(nickname))
+                    nickname = AppSettings.GetUsername(this);
+                if (string.IsNullOrWhiteSpace(nickname))
+                    nickname = "Guest";
 
                 // Подключение
                 Client.Connect(
                     server.Address,
-                    string.IsNullOrWhiteSpace(server.Nickname) ? "Guest" : server.Nickname,
+                    nickname,
                     serverPassword,
                     server.DefaultChannel,
                     channelPassword
