@@ -156,6 +156,9 @@ namespace MobileTS {
         public void HideServerActionBarIcon() {
             _showServerIcon = false;
             ActionBar?.SetDisplayUseLogoEnabled(false);
+            // Без логотипа включённый ShowHome выводит в ActionBar иконку приложения — гасим его,
+            // иначе при уходе с экрана сервера (в т.ч. при отключении) появляется логотип приложения.
+            ActionBar?.SetDisplayShowHomeEnabled(false);
         }
 
         // ===================== Боковое меню =====================

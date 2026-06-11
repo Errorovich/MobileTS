@@ -31,6 +31,7 @@ namespace MobileTS.Activity.Server {
             var micOff = row.FindViewById<ImageView>(Resource.Id.imgMicOff)!;
             var speakerOff = row.FindViewById<ImageView>(Resource.Id.imgSpeakerOff)!;
             var afk = row.FindViewById<ImageView>(Resource.Id.imgAfk)!;
+            var afkMessage = row.FindViewById<TextView>(Resource.Id.txtAfkMessage)!;
 
             name.Text = client.Name;
 
@@ -48,6 +49,17 @@ namespace MobileTS.Activity.Server {
             micOff.Visibility = client.InputMuted ? ViewStates.Visible : ViewStates.Gone;
             speakerOff.Visibility = client.OutputMuted ? ViewStates.Visible : ViewStates.Gone;
             afk.Visibility = away ? ViewStates.Visible : ViewStates.Gone;
+
+            // Сообщение AFK показываем слева от значка — только пока клиент действительно отошёл
+            // (Book.AwayMessage может остаться от прошлого AFK, поэтому гейтим по away).
+            string? awayMsg = away ? client.AwayMessage : null;
+            if (!string.IsNullOrEmpty(awayMsg)) {
+                afkMessage.Text = awayMsg;
+                afkMessage.Visibility = ViewStates.Visible;
+            }
+            else {
+                afkMessage.Visibility = ViewStates.Gone;
+            }
         }
     }
 }
