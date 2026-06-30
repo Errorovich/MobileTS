@@ -4,6 +4,7 @@ using Android.Content.PM;
 using Android.OS;
 using System.Text.Json;
 using MobileTS.Logging;
+using static TSLib.Full.TsFullClient;
 
 namespace MobileTS.Services {
     [Service(ForegroundServiceType = ForegroundService.TypeMicrophone)]
@@ -42,6 +43,8 @@ namespace MobileTS.Services {
                     server.DefaultChannel,
                     channelPassword
                 );
+
+                StopWhenDisconnected();
             }
 
             return StartCommandResult.Sticky;
@@ -54,6 +57,21 @@ namespace MobileTS.Services {
             StopForeground(StopForegroundFlags.Remove);
             _ = Client.Disconnect();
             base.OnDestroy();
+        }
+
+        // Соединение может оборваться само (сервер кикнул, потеря сети, неудачное подключение) —
+        // тогда статус становится Disconnected, но foreground-сервис продолжает жить и держать
+        // микрофон, зря расходуя батарею. Останавливаем сервис на терминальном статусе.
+        private void StopWhenDisconnected() {
+            Client.SubscribeInstance(c => {
+                void StatusChanged(object? sender, TsClientStatus status) {
+                    if (status != TsClientStatus.Disconnected)
+                        return;
+                    c.OnStatusChangedEvent -= StatusChanged;
+                    StopSelf();
+                }
+                c.OnStatusChangedEvent += StatusChanged;
+            });
         }
 
         public override IBinder? OnBind(Intent? intent) => null;

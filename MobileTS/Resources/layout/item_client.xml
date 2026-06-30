@@ -19,6 +19,18 @@
         android:textSize="14sp"
         android:textColor="#000000" />
 
+    <TextView
+        android:id="@+id/txtAfkMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:maxWidth="140dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textSize="12sp"
+        android:textColor="#F57C00"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/imgAfk"
         android:layout_width="18dp"
