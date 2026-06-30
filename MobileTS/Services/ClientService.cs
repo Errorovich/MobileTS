@@ -20,7 +20,7 @@ namespace MobileTS.Services {
             // intent == null при пересоздании сервиса системой (Sticky) — подключаться нечем.
             var json = intent?.GetStringExtra("server_info");
             if (json != null) {
-                var server = JsonSerializer.Deserialize<ServerInfo>(json)!;
+                var server = JsonSerializer.Deserialize(json, AppJsonContext.Default.ServerInfo)!;
                 AppLog.I("Service", "OnStartCommand — подключение к " + server.Address);
 
                 // Пароли хранятся и передаются в открытом виде (без Crypto).

@@ -1,0 +1,29 @@
+<Project>
+  <!-- ШАБЛОН подписи Release-сборки. Скопируй этот файл рядом как signing.props
+       (он gitignore-нут и в репозиторий не попадёт) и подставь свои значения.
+       Сам keystore (*.keystore) тоже игнорируется git'ом — храни его вне репозитория
+       и не теряй: обновления того же пакета должны подписываться тем же ключом.
+
+       Создать keystore:
+         keytool -genkeypair -v -keystore mobilets-release.keystore -alias mobilets \
+                 -keyalg RSA -keysize 2048 -validity 10000
+
+       Сборка в CI без файла signing.props — те же свойства передаются аргументами
+       (перекрывают импорт), keystore восстанавливается из секрета:
+         dotnet build MobileTS/MobileTS.csproj -c Release -f net9.0-android -t:SignAndroidPackage \
+           -p:AndroidKeyStore=true \
+           -p:AndroidSigningKeyStore=mobilets-release.keystore \
+           -p:AndroidSigningKeyAlias=mobilets \
+           -p:AndroidSigningStorePass=$KEYSTORE_PASS \
+           -p:AndroidSigningKeyPass=$KEY_PASS
+
+       Без signing.props и без -p: Release собирается с авто-debug-ключом (годен для
+       сайдлоада, не для обновления подписанной релиз-сборки). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <AndroidKeyStore>true</AndroidKeyStore>
+    <AndroidSigningKeyStore>mobilets-release.keystore</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias>mobilets</AndroidSigningKeyAlias>
+    <AndroidSigningStorePass>CHANGE_ME</AndroidSigningStorePass>
+    <AndroidSigningKeyPass>CHANGE_ME</AndroidSigningKeyPass>
+  </PropertyGroup>
+</Project>

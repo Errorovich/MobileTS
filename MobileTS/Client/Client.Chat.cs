@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Android.Content;
 using TSLib;
 using TSLib.Full;
@@ -32,6 +33,13 @@ namespace MobileTS {
             public string Text { get; set; } = "";
             public bool IsOwn { get; set; }
             public long Time { get; set; }
+        }
+
+        // Сгенерированные контракты STJ для истории чата — без рефлексии, чтобы не падать под
+        // TrimMode=full в Release (см. AppJsonContext). Вложенный контекст видит приватный
+        // ChatMessageDto, поэтому DTO не нужно делать публичным.
+        [JsonSerializable(typeof(List<ChatMessageDto>))]
+        private partial class ChatJsonContext : JsonSerializerContext {
         }
 
         // Новое сообщение добавлено в историю (своё или входящее).
@@ -99,7 +107,7 @@ namespace MobileTS {
                     var prefs = ctx.GetSharedPreferences(ChatPrefsName, FileCreationMode.Private);
                     var json = prefs?.GetString(ChatKey(address, channel), null);
                     if (!string.IsNullOrEmpty(json)) {
-                        var dtos = JsonSerializer.Deserialize<List<ChatMessageDto>>(json);
+                        var dtos = JsonSerializer.Deserialize(json, ChatJsonContext.Default.ListChatMessageDto);
                         if (dtos != null)
                             foreach (var d in dtos)
                                 loaded.Add(new ChatMessage(d.Sender, d.Text, d.IsOwn, FromUnixMs(d.Time)));
@@ -139,7 +147,7 @@ namespace MobileTS {
             if (ctx == null || string.IsNullOrEmpty(address) || currentChatChannel is not ChannelId channel)
                 return;
 
-            ChatMessageDto[] dtos;
+            List<ChatMessageDto> dtos;
             lock (chatLock) {
                 int skip = Math.Max(0, chatHistory.Count - ChatMaxMessages);
                 dtos = chatHistory.Skip(skip).Select(m => new ChatMessageDto {
@@ -147,12 +155,12 @@ namespace MobileTS {
                     Text = m.Text,
                     IsOwn = m.IsOwn,
                     Time = ToUnixMs(m.Time),
-                }).ToArray();
+                }).ToList();
             }
 
             try {
                 var prefs = ctx.GetSharedPreferences(ChatPrefsName, FileCreationMode.Private);
-                prefs?.Edit()?.PutString(ChatKey(address, channel), JsonSerializer.Serialize(dtos))?.Apply();
+                prefs?.Edit()?.PutString(ChatKey(address, channel), JsonSerializer.Serialize(dtos, ChatJsonContext.Default.ListChatMessageDto))?.Apply();
             }
             catch {
                 // кэш не критичен — игнорируем ошибки записи

@@ -414,3 +414,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Android signing — keys & passwords stay out of git (template: MobileTS/signing.props.sample)
+*.keystore
+*.jks
+*.p12
+signing.props

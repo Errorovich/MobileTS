@@ -14,7 +14,7 @@ namespace MobileTS {
     // Единственная «настоящая» Activity приложения. Держит боковое меню (DrawerLayout) и ActionBar,
     // а экраны показывает фрагментами в content_frame — так меню не пересоздаётся и не моргает при
     // переходах между разделами.
-    [Activity(Label = "@string/app_name", Theme = "@style/AppTheme", MainLauncher = true)]
+    [Activity(Label = "${appLabel}", Theme = "@style/AppTheme", MainLauncher = true)]
     public class MainActivity : Android.App.Activity {
         private const string StateConnectedTitle = "connected_title";
         private const string StateConnectedAddress = "connected_address";

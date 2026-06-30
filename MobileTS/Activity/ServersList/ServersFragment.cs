@@ -96,7 +96,7 @@ namespace MobileTS.Activity.ServersList {
             AppLog.I("UI", "Пользователь запустил подключение к " + server.Address);
             // Передаем весь объект в сервис, пароли остаются зашифрованными
             var clientServiceIntent = new Intent(Activity, typeof(ClientService));
-            clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server));
+            clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server, AppJsonContext.Default.ServerInfo));
             Activity!.StartService(clientServiceIntent);
 
             // Подключение можно прервать кнопкой «Назад»: диалог отменяемый, по отмене останавливаем
@@ -179,7 +179,7 @@ namespace MobileTS.Activity.ServersList {
 
         private void SaveServers() {
             var prefs = Activity!.GetSharedPreferences(PrefsName, FileCreationMode.Private);
-            var json = JsonSerializer.Serialize(_servers);
+            var json = JsonSerializer.Serialize(_servers, AppJsonContext.Default.ListServerInfo);
             prefs!.Edit()!.PutString(ServersKey, json).Apply();
         }
 
@@ -187,7 +187,7 @@ namespace MobileTS.Activity.ServersList {
             var prefs = Activity!.GetSharedPreferences(PrefsName, FileCreationMode.Private);
             var json = prefs!.GetString(ServersKey, null);
             if (!string.IsNullOrEmpty(json)) {
-                var list = JsonSerializer.Deserialize<List<ServerInfo>>(json);
+                var list = JsonSerializer.Deserialize(json, AppJsonContext.Default.ListServerInfo);
                 if (list != null) {
                     _servers.Clear();
                     _servers.AddRange(list);
