@@ -33,6 +33,17 @@
        собирается с авто-debug-ключом — как любая чистая копия без секретов. В CI те же
        свойства можно передать аргументами -p:... (они перекрывают импорт). -->
   <Import Project="$(MSBuildThisFileDirectory)signing.props" Condition="Exists('$(MSBuildThisFileDirectory)signing.props')" />
+
+  <!-- Набор ABI релизной сборки. По умолчанию обе (универсальный APK). Для отдельной сборки под
+       одну архитектуру передай -p:AbiTarget=android-arm64 (или android-x64) — см. scripts/build-release.ps1.
+       Почему через своё свойство AbiTarget, а не напрямую -p:RuntimeIdentifiers: глобальное
+       RuntimeIdentifiers из командной строки протекает в TSLib (net9.0) и роняет его сборку (MSB3030);
+       AbiTarget же читает только этот проект. Только для Release — Debug деплоится через -t:Run как есть. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifiers Condition="'$(AbiTarget)' == ''">android-arm64;android-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers Condition="'$(AbiTarget)' != ''">$(AbiTarget)</RuntimeIdentifiers>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\TSLib\TSLib.csproj" />
   </ItemGroup>
