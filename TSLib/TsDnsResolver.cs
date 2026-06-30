@@ -25,7 +25,7 @@ namespace TSLib
 	/// <summary>Provides methods to resolve TSDNS, SRV redirects and nicknames</summary>
 	public static class TsDnsResolver
 	{
-		//private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		private static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 		public const ushort TsVoiceDefaultPort = 9987;
 		public const ushort TsQueryDefaultPort = 10011;
 		private const ushort TsDnsDefaultPort = 41144;
@@ -75,16 +75,16 @@ namespace TSLib
 			if (string.IsNullOrEmpty(address)) throw new ArgumentNullException(nameof(address));
 			IPEndPoint? endPoint;
 
-			//Log.Debug("Trying to look up '{0}'", address);
+			Log.Debug("Trying to look up '{0}'", address);
 
 			// if this address does not look like a domain it might be a nickname
 			if (!address.Contains(".") && !address.Contains(":") && address != "localhost")
 			{
-				//Log.Debug("Resolving '{0}' as nickname", address);
+				Log.Debug("Resolving '{0}' as nickname", address);
 				var resolvedNickname = await ResolveNickname(address).ConfigureAwait(false);
 				if (resolvedNickname != null)
 				{
-					//Log.Debug("Resolved nickname '{0}' as '{1}'", address, resolvedNickname);
+					Log.Debug("Resolved nickname '{0}' as '{1}'", address, resolvedNickname);
 					address = resolvedNickname;
 				}
 			}
@@ -92,13 +92,13 @@ namespace TSLib
 			// host is specified as an IP (+ Port)
 			if ((endPoint = ParseIpEndPoint(address, defaultPort)) != null)
 			{
-				//Log.Debug("Address is an ip: '{0}'", endPoint);
+				Log.Debug("Address is an ip: '{0}'", endPoint);
 				return endPoint;
 			}
 
 			if (!Uri.TryCreate("http://" + address, UriKind.Absolute, out var uri))
 			{
-				//Log.Warn("Could not parse address as uri");
+				Log.Warn("Could not parse address as uri");
 				return null;
 			}
 
@@ -112,7 +112,7 @@ namespace TSLib
 			{
 				if (hasUriPort)
 					endPoint.Port = uri.Port;
-				//Log.Debug("Address found using _udp prefix '{0}'", endPoint);
+				Log.Debug("Address found using _udp prefix '{0}'", endPoint);
 				return endPoint;
 			}
 
@@ -141,7 +141,7 @@ namespace TSLib
 				{
 					if (hasUriPort)
 						endPoint.Port = uri.Port;
-					//Log.Debug("Address found using _tcp prefix '{0}'", endPoint);
+					Log.Debug("Address found using _tcp prefix '{0}'", endPoint);
 					return endPoint;
 				}
 			}
@@ -165,7 +165,7 @@ namespace TSLib
 
 		private static async Task<IPEndPoint?> ResolveSrv(Resolver resolver, string domain)
 		{
-			//Log.Trace("Resolving srv record '{0}'", domain);
+			Log.Trace("Resolving srv record '{0}'", domain);
 			Response response;
 			try
 			{
@@ -173,7 +173,7 @@ namespace TSLib
 			}
 			catch (Exception ex)
 			{
-				//Log.Warn(ex, "Unexcepted dns resolve error.");
+				Log.Warn(ex, "Unexcepted dns resolve error.");
 				return null;
 			}
 
@@ -190,7 +190,7 @@ namespace TSLib
 
 		private static async Task<IPEndPoint?> ResolveTsDns(string tsDnsAddress, ushort port, string resolveAddress, ushort defaultPort)
 		{
-			//Log.Trace("Looking for the tsdns under '{0}'", tsDnsAddress);
+			Log.Trace("Looking for the tsdns under '{0}'", tsDnsAddress);
 			var hostAddress = await ResolveDns(tsDnsAddress).ConfigureAwait(false);
 			if (hostAddress is null)
 				return null;
@@ -200,7 +200,7 @@ namespace TSLib
 
 		private static async Task<IPEndPoint?> ResolveTsDns(IPEndPoint tsDnsAddress, string resolveAddress, ushort defaultPort)
 		{
-			//Log.Trace("Looking up tsdns address '{0}'", resolveAddress);
+			Log.Trace("Looking up tsdns address '{0}'", resolveAddress);
 			try
 			{
 				using var client = new TcpClient();
@@ -213,7 +213,7 @@ namespace TSLib
 				await Task.WhenAny(connectTask, cancelTask);
 				if (cancelTask.IsCompleted)
 				{
-					//Log.Debug("Request to '{0}' timed out", tsDnsAddress);
+					Log.Debug("Request to '{0}' timed out", tsDnsAddress);
 					return null;
 				}
 
@@ -231,7 +231,7 @@ namespace TSLib
 			}
 			catch (Exception ex)
 			{
-				//Log.Debug(ex, "Socket error checking '{0}', reason {1}", resolveAddress, ex.Message);
+				Log.Debug(ex, "Socket error checking '{0}', reason {1}", resolveAddress, ex.Message);
 				return null;
 			}
 		}
@@ -240,7 +240,7 @@ namespace TSLib
 		{
 			try
 			{
-				//Log.Trace("Lookup dns: '{0}'", hostOrNameAddress);
+				Log.Trace("Lookup dns: '{0}'", hostOrNameAddress);
 				IPHostEntry hostEntry = await Dns.GetHostEntryAsync(hostOrNameAddress).ConfigureAwait(false);
 				if (hostEntry.AddressList.Length == 0)
 					return null;
@@ -285,13 +285,13 @@ namespace TSLib
 			}
 			catch (Exception ex)
 			{
-				//Log.Warn(ex, "Failed to resolve nickname \"{0}\"", nickname);
+				Log.Warn(ex, "Failed to resolve nickname \"{0}\"", nickname);
 				return null;
 			}
 			var splits = result.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 			if (splits.Length == 0)
 			{
-				//Log.Warn("Nickname \"{0}\" has no address entries", nickname);
+				Log.Warn("Nickname \"{0}\" has no address entries", nickname);
 				return null;
 			}
 

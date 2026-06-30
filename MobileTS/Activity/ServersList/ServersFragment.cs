@@ -3,6 +3,7 @@ using Android.Content.PM;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
 using System.Text.Json;
+using MobileTS.Logging;
 using MobileTS.Services;
 using TSLib;
 using static TSLib.Full.TsFullClient;
@@ -92,6 +93,7 @@ namespace MobileTS.Activity.ServersList {
         }
 
         private void StartConnection(ServerInfo server) {
+            AppLog.I("UI", "Пользователь запустил подключение к " + server.Address);
             // Передаем весь объект в сервис, пароли остаются зашифрованными
             var clientServiceIntent = new Intent(Activity, typeof(ClientService));
             clientServiceIntent.PutExtra("server_info", JsonSerializer.Serialize(server));
@@ -148,6 +150,7 @@ namespace MobileTS.Activity.ServersList {
         // Показывает причину неудачного подключения, чтобы окно "Подключение..." не закрывалось молча.
         private void ShowConnectionError(DisconnectEventArgs? info) {
             string reason = DescribeDisconnect(info);
+            AppLog.W("UI", "Не удалось подключиться: " + reason);
 
             new AlertDialog.Builder(Activity)
                 .SetTitle("Не удалось подключиться")!

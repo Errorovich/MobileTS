@@ -17,6 +17,11 @@ namespace TSLib.Full.Book
 {
 	public partial class Connection
 	{
+		// Логгер для сгенерированного M2B.cs (Update*-методы): объявлен здесь, в рукописном
+		// partial, чтобы пережить перегенерацию шаблона. Используется только в ветках
+		// «protocol error» (obj == null) — не горячий путь.
+		private static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
+
 		public Client? Self() => GetClient(OwnClient);
 		public Channel? CurrentChannel()
 		{

@@ -19,7 +19,7 @@ namespace TSLib.Scheduler
 {
 	public sealed class DedicatedTaskScheduler : TaskScheduler, IDisposable
 	{
-		//private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		private static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 		private static readonly TimeSpan CombineTimerThreshold = TimeSpan.FromMilliseconds(10);
 		private readonly TaskFactory factory;
 		private readonly BlockingCollection<Task> queue = new BlockingCollection<Task>();
@@ -77,9 +77,9 @@ namespace TSLib.Scheduler
 					}
 				}
 			}
-			//Log.Debug("Finalizing TaskScheduler");
+			Log.Debug("Finalizing TaskScheduler");
 			queue.Dispose();
-			//Log.Debug("TaskScheduler closed");
+			Log.Debug("TaskScheduler closed");
 		}
 
 		private TimeSpan DispatchTimers()
@@ -87,7 +87,7 @@ namespace TSLib.Scheduler
 			var now = GetTimestamp();
 			if (timers.Count == 0)
 			{
-				//Log.ConditionalTrace("Quick return 1");
+				Log.ConditionalTrace("Quick return 1");
 				nextTimerDue = TimeSpan.MaxValue;
 				return Timeout.InfiniteTimeSpan;
 			}
@@ -101,11 +101,11 @@ namespace TSLib.Scheduler
 			//       When we are not in 'inf' state we will just check like normal.
 			if (queue.Count > 0 && now + CombineTimerThreshold < nextTimerDue && nextTimerDue != TimeSpan.MaxValue)
 			{
-				//Log.ConditionalTrace("Quick return 2");
+				Log.ConditionalTrace("Quick return 2");
 				return nextTimerDue - now;
 			}
 
-			//Log.ConditionalTrace("Recalc");
+			Log.ConditionalTrace("Recalc");
 
 			var timeTillNextTimer = TimeSpan.MaxValue;
 			foreach (var timer in timers) // TODO might be modified
@@ -158,7 +158,7 @@ namespace TSLib.Scheduler
 				lastTaskCompleted = GetTimestamp();
 			}
 
-			//Log.Trace("Processing Task {0} {1}", task.Id, inline ? "inline" : "from queue");
+			Log.Trace("Processing Task {0} {1}", task.Id, inline ? "inline" : "from queue");
 			taskStack.Push(task);
 		}
 
@@ -167,7 +167,7 @@ namespace TSLib.Scheduler
 			var now = GetTimestamp();
 			var calcTime = (now - lastTaskCompleted);
 			actualRunningTime += calcTime;
-			//Log.Trace("Task {0} took {1:F3}ms. Resulted {2}", task.Id, calcTime.TotalMilliseconds, task.Status);
+			Log.Trace("Task {0} took {1:F3}ms. Resulted {2}", task.Id, calcTime.TotalMilliseconds, task.Status);
 			lastTaskCompleted = now;
 
 			Trace.Assert(task == taskStack.Pop());
@@ -201,7 +201,7 @@ namespace TSLib.Scheduler
 			}
 			catch (Exception ex)
 			{
-				//Log.Debug(ex, "Dropping Task");
+				Log.Debug(ex, "Dropping Task");
 			}
 		}
 

@@ -6,6 +6,7 @@ using Android.Media.TV;
 using Android.Provider;
 using Android.Runtime;
 using MobileTS.Audio;
+using MobileTS.Logging;
 using TSLib;
 using TSLib.Audio;
 using TSLib.Audio.Opus;
@@ -144,11 +145,17 @@ namespace MobileTS {
 
         public static void Connect(string address, string? nickname = null, string? serverPassword = null, string? defaultChannel = null, string? defaultChannelPassword = null) {
             // Защита от повторного подключения поверх живого соединения (утечка потока/микрофона).
-            if (client != null || clientThread != null)
+            if (client != null || clientThread != null) {
+                AppLog.W("Client", "Connect проигнорирован: соединение уже активно");
                 return;
+            }
 
-            if (identity == null)
+            if (identity == null) {
+                AppLog.E("Client", "Connect невозможен: identity не инициализирована");
                 return;
+            }
+
+            AppLog.I("Client", "Подключение к " + address + " (ник: " + (nickname ?? "Guest") + ")");
 
             // Новая сессия — снимаем флаг дисконнекта (предыдущая очистка к этому моменту завершена,
             // т.к. client/clientThread выше уже null).
@@ -249,9 +256,14 @@ namespace MobileTS {
                 // возвращает ошибку в результате. Бросает лишь на некорректных аргументах.
                 connected = (await localClient.Connect(conData)).Ok;
             }
-            catch {
+            catch (Exception ex) {
+                AppLog.E("Client", "Исключение при подключении", ex);
                 connected = false;
             }
+
+            AppLog.I("Client", connected
+                ? "Подключение установлено: " + (currentAddress ?? "")
+                : "Подключение не удалось: " + (currentAddress ?? ""));
 
             // Сообщаем серверу восстановленное состояние звука/AFK (мы на потоке планировщика —
             // вызываем клиент напрямую), чтобы остальные участники сразу видели наши иконки.
@@ -268,8 +280,9 @@ namespace MobileTS {
                         { "client_away_message", afk ? (afkMsg ?? "") : "" },
                     });
                 }
-                catch {
+                catch (Exception ex) {
                     // не критично — локальное состояние уже применено
+                    AppLog.W("Client", "Не удалось отправить начальное состояние звука/AFK", ex);
                 }
 
                 // Подгружаем историю чата канала, в котором оказались после подключения.
@@ -443,6 +456,8 @@ namespace MobileTS {
             if (Interlocked.Exchange(ref disconnecting, 1) == 1)
                 return;
 
+            AppLog.I("Client", "Отключение и очистка ресурсов: " + (currentAddress ?? ""));
+
             var c = client;
             var scheduler = clientScheduler;
             var localAudio = audio;
@@ -456,8 +471,9 @@ namespace MobileTS {
                 try {
                     await scheduler.InvokeAsync(() => c.Disconnect());
                 }
-                catch {
+                catch (Exception ex) {
                     // игнорируем — всё равно освобождаем ресурсы ниже
+                    AppLog.W("Client", "Исключение при graceful-дисконнекте", ex);
                 }
                 c.Dispose();
             }

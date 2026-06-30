@@ -105,19 +105,19 @@ namespace TSLib
 				if (remoteAddress is null)
 				{
 					token.Status = TransferStatus.Failed;
-					//Log.Trace("Client is not connected. Transfer failed {@token}", token);
+					Log.Trace("Client is not connected. Transfer failed {@token}", token);
 					return CommandError.ConnectionClosed;
 				}
 				if (token.Status != TransferStatus.Waiting)
 					return CommandError.Custom("Token is not open");
 				token.Status = TransferStatus.Transfering;
 
-				//Log.Trace("Creating new file transfer connection to {0}", remoteAddress);
+				Log.Trace("Creating new file transfer connection to {0}", remoteAddress);
 				using var client = new TcpClient(remoteAddress.AddressFamily);
 				try { await client.ConnectAsync(remoteAddress.Address, token.Port); }
 				catch (SocketException ex)
 				{
-					//Log.Warn(ex, "SocketException trying to connect to filetransfer port");
+					Log.Warn(ex, "SocketException trying to connect to filetransfer port");
 					token.Status = TransferStatus.Failed;
 					return CommandError.ConnectionClosed;
 				}
@@ -168,11 +168,11 @@ namespace TSLib
 			}
 			catch (IOException ex)
 			{
-				//Log.Debug(ex, "IOException during filetransfer");
+				Log.Debug(ex, "IOException during filetransfer");
 			}
 			catch (Exception ex)
 			{
-				//Log.Error(ex, "Exception during filetransfer");
+				Log.Error(ex, "Exception during filetransfer");
 			}
 			finally
 			{

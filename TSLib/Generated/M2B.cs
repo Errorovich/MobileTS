@@ -149,7 +149,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetChannel(msg.ChannelId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ChannelEdited' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ChannelEdited' has no local object ({$msg})", msg);
 				return;
 			}
 			{
@@ -216,7 +216,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetChannel(msg.ChannelId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ChannelMoved' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ChannelMoved' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = ChannelOrderCmFun(msg); if (tmpv != null) obj.Order = (ChannelId)tmpv; }
@@ -231,7 +231,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetChannel(msg.ChannelId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ChannelSubscribed' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ChannelSubscribed' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = ChannelSubscribeFun(msg); if (tmpv != null) obj.Subscribed = (bool)tmpv; }
@@ -245,7 +245,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetChannel(msg.ChannelId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ChannelUnsubscribed' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ChannelUnsubscribed' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = ChannelUnsubscribeFun(msg); if (tmpv != null) obj.Subscribed = (bool)tmpv; }
@@ -259,7 +259,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetClient(msg.ClientId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ClientChannelGroupChanged' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ClientChannelGroupChanged' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = msg.ChannelGroup; if (tmpv != null) obj.ChannelGroup = (ChannelGroupId)tmpv; }
@@ -324,7 +324,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetClient(msg.ClientId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ClientMoved' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ClientMoved' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = msg.TargetChannelId; if (tmpv != null) obj.Channel = (ChannelId)tmpv; }
@@ -387,7 +387,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetClient(msg.ClientId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ClientServerGroupAdded' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ClientServerGroupAdded' has no local object ({$msg})", msg);
 				return;
 			}
 			obj.ServerGroups.Add(msg.ServerGroupId);
@@ -401,7 +401,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetClient(msg.ClientId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ClientServerGroupRemoved' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ClientServerGroupRemoved' has no local object ({$msg})", msg);
 				return;
 			}
 			obj.ServerGroups.Remove(msg.ServerGroupId);
@@ -415,7 +415,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetClient(msg.ClientId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ClientUpdated' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ClientUpdated' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = AwayCuFun(msg); if (tmpv != null) obj.AwayMessage = (str)tmpv; }
@@ -466,7 +466,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetServer();
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ServerEdited' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ServerEdited' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = msg.CodecEncryptionMode; if (tmpv != null) obj.CodecEncryptionMode = (CodecEncryptionMode)tmpv; }
@@ -493,7 +493,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetChannel(msg.ChannelId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ChannelPermissionHints' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ChannelPermissionHints' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = msg.Flags; if (tmpv != null) obj.PermissionHints = (ChannelPermissionHint)tmpv; }
@@ -507,7 +507,7 @@ namespace TSLib.Full.Book
 		{
 			var obj = GetClient(msg.ClientId);
 			if (obj == null) {
-				//Log.Warn("Internal Book protocol error. Update 'ClientPermissionHints' has no local object ({$msg})", msg);
+				Log.Warn("Internal Book protocol error. Update 'ClientPermissionHints' has no local object ({$msg})", msg);
 				return;
 			}
 			{ var tmpv = msg.Flags; if (tmpv != null) obj.PermissionHints = (ClientPermissionHint)tmpv; }

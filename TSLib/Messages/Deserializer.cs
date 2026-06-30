@@ -15,7 +15,7 @@ namespace TSLib.Messages
 {
 	public class Deserializer
 	{
-		//protected static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		protected static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 		public IPermissionTransform PermissionTransform { get; set; } = DummyPermissionTransform.Instance;
 
 		private const byte AsciiSpace = (byte)' ';
@@ -147,7 +147,7 @@ namespace TSLib.Messages
 			}
 			catch (Exception ex)
 			{
-				//Log.Error(ex, "Deserialization format error. Data: class:{0} field:{1} value:{2} msg:{3}", qm.GetType().Name, key.NewUtf8String(), value.NewUtf8String(), line.NewUtf8String());
+				Log.Error(ex, "Deserialization format error. Data: class:{0} field:{1} value:{2} msg:{3}", qm.GetType().Name, key.NewUtf8String(), value.NewUtf8String(), line.NewUtf8String());
 				return false;
 			}
 		}

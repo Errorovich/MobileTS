@@ -32,7 +32,7 @@ namespace TSLib.Full
 	/// <summary>Provides all cryptographic functions needed for the low- and high level TeamSpeak protocol usage.</summary>
 	public sealed class TsCrypt
 	{
-		//private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		private static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 		private const string DummyKeyAndNonceString = "c:\\windows\\system\\firewall32.cpl";
 		private static readonly byte[] DummyKey = Encoding.ASCII.GetBytes(DummyKeyAndNonceString.Substring(0, 16));
 		private static readonly byte[] DummyIv = Encoding.ASCII.GetBytes(DummyKeyAndNonceString.Substring(16, 16));
@@ -330,16 +330,16 @@ namespace TSLib.Full
 			var licenseChainR = Licenses.Parse(licenseBytes);
 			if (!licenseChainR.Ok)
 				return licenseChainR.Error;
-			//Log.Debug("Parsed license successfully in {0:F3}ms", sw.Elapsed.TotalMilliseconds);
+			Log.Debug("Parsed license successfully in {0:F3}ms", sw.Elapsed.TotalMilliseconds);
 
 			var licenseChain = licenseChainR.Value;
 			sw.Restart();
 			var key = licenseChain.DeriveKey();
-			//Log.Debug("Processed license successfully in {0:F3}ms", sw.Elapsed.TotalMilliseconds);
+			Log.Debug("Processed license successfully in {0:F3}ms", sw.Elapsed.TotalMilliseconds);
 
 			sw.Restart();
 			var keyArr = GetSharedSecret2(key, privateKey);
-			//Log.Debug("Calculated shared secret in {0:F3}ms", sw.Elapsed.TotalMilliseconds);
+			Log.Debug("Calculated shared secret in {0:F3}ms", sw.Elapsed.TotalMilliseconds);
 
 			return SetSharedSecret(alphaTmp, betaBytes, keyArr);
 		}
@@ -551,7 +551,7 @@ namespace TSLib.Full
 				}
 				catch (Exception ex)
 				{
-					//Log.Error(ex, "Internal encryption error.");
+					Log.Error(ex, "Internal encryption error.");
 					throw;
 				}
 			}
@@ -605,7 +605,7 @@ namespace TSLib.Full
 			//  with the dummy key.
 			if (packet.PacketType == PacketType.Ack && packet.PacketId <= 2)
 			{
-				//Log.Debug("Using shady ack workaround.");
+				Log.Debug("Using shady ack workaround.");
 				return DecryptData(ref packet, true);
 			}
 			else

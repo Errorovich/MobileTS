@@ -6,6 +6,7 @@ using Android.Media;
 using Android.Views;
 using MobileTS.Audio;
 using TSLib.Audio;
+using TSLib.Logging;
 
 namespace MobileTS.Activity.Settings {
     // Раздел «Настройки»: имя пользователя по умолчанию (см. AppSettings) и режим активации
@@ -23,6 +24,7 @@ namespace MobileTS.Activity.Settings {
         private EditText? _delayValue;
         private Button? _btnTest;
         private VolumeMeterView? _meter;
+        private Spinner? _logLevelSpinner;
 
         // Тест громкости: собственный AudioRecord, не связанный с подключением. Захваченные кадры
         // прогоняем через настоящий VoiceActivationPipe — тогда тест в точности повторяет работу VAD,
@@ -114,6 +116,20 @@ namespace MobileTS.Activity.Settings {
                     StopTest();
                 else
                     StartTest();
+            };
+
+            // --- Уровень логов ---
+            _logLevelSpinner = view.FindViewById<Spinner>(Resource.Id.logLevelSpinner)!;
+            var levelNames = new[] { "Trace — всё", "Debug", "Info", "Warn", "Error — только ошибки" };
+            var levelAdapter = new ArrayAdapter<string>(
+                Activity!, Android.Resource.Layout.SimpleSpinnerItem, levelNames);
+            levelAdapter.SetDropDownViewResource(Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            _logLevelSpinner.Adapter = levelAdapter;
+            _logLevelSpinner.SetSelection((int)AppSettings.GetLogLevel(Activity!));
+            _logLevelSpinner.ItemSelected += (_, e) => {
+                var level = (LogLevel)e.Position;
+                AppSettings.SetLogLevel(Activity!, level);
+                LogSink.MinLevel = level; // живое применение
             };
 
             return view;

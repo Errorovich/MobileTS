@@ -16,7 +16,7 @@ namespace TSLib.Helper
 {
 	internal static class NativeLibraryLoader
 	{
-		//private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		private static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 
 #if !NETCOREAPP3_1
 		[DllImport("kernel32.dll", SetLastError = true)]
@@ -33,7 +33,7 @@ namespace TSLib.Helper
 				}
 				catch (DllNotFoundException ex)
 				{
-					//Log.Error(ex, "Failed to load library \"{0}\".", lib);
+					Log.Error(ex, "Failed to load library \"{0}\".", lib);
 					return false;
 				}
 			}
@@ -41,7 +41,7 @@ namespace TSLib.Helper
 			{
 				foreach (var libPath in LibPathOptions(lib))
 				{
-					//Log.Debug("Loading \"{0}\" from \"{1}\"", lib, libPath);
+					Log.Debug("Loading \"{0}\" from \"{1}\"", lib, libPath);
 #if NETCOREAPP3_1
 					if (NativeLibrary.TryLoad(libPath, out _))
 						return true;
@@ -51,7 +51,7 @@ namespace TSLib.Helper
 						return true;
 #endif
 				}
-				//Log.Error("Failed to load library \"{0}\", error: {1}", lib, Marshal.GetLastWin32Error());
+				Log.Error("Failed to load library \"{0}\", error: {1}", lib, Marshal.GetLastWin32Error());
 				return false;
 			}
 			return true;

@@ -1,4 +1,5 @@
 using Android.Content;
+using TSLib.Logging;
 
 namespace MobileTS {
     // Режим активации микрофона.
@@ -22,8 +23,12 @@ namespace MobileTS {
         private const string AfkKey = "afk";
         private const string AfkMessageKey = "afk_message";
 
+        // Минимальный уровень логов библиотеки/приложения, попадающих в «Журнал» и файл.
+        private const string LogLevelKey = "log_level";
+
         public const float DefaultVoiceThreshold = 0.05f;
         public const int DefaultVoiceDeactivationDelayMs = 300;
+        public const LogLevel DefaultLogLevel = LogLevel.Debug;
 
         private static ISharedPreferences? Prefs(Context context) =>
             context.GetSharedPreferences(PrefsName, FileCreationMode.Private);
@@ -51,6 +56,12 @@ namespace MobileTS {
 
         public static void SetVoiceDeactivationDelay(Context context, int valueMs) =>
             Prefs(context)!.Edit()!.PutInt(VoiceDeactivationDelayKey, valueMs)!.Apply();
+
+        public static LogLevel GetLogLevel(Context context) =>
+            (LogLevel)(Prefs(context)?.GetInt(LogLevelKey, (int)DefaultLogLevel) ?? (int)DefaultLogLevel);
+
+        public static void SetLogLevel(Context context, LogLevel value) =>
+            Prefs(context)!.Edit()!.PutInt(LogLevelKey, (int)value)!.Apply();
 
         // ===================== Состояние звука/AFK (глобальное) =====================
 

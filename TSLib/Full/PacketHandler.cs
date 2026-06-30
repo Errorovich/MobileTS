@@ -174,7 +174,7 @@ namespace TSLib.Full
 			var wasClosed = Interlocked.Exchange(ref closed, 1);
 			if (wasClosed != 0)
 				return;
-			//Log.Debug("Stopping PacketHandler {0}", closeReason);
+			Log.Debug("Stopping PacketHandler {0}", closeReason);
 
 			lock (sendLoopLock)
 			{
@@ -347,7 +347,7 @@ namespace TSLib.Full
 					}
 					else
 					{
-						//Log.Debug("Socket error: {@args}", args);
+						Log.Debug("Socket error: {@args}", args);
 						if (args.SocketError == SocketError.ConnectionReset)
 						{
 							self.Stop(Reason.SocketError);
@@ -362,7 +362,7 @@ namespace TSLib.Full
 						Trace.Assert(self.socket != null, nameof(self.socket) + " is null");
 						try { isAsync = self.socket!.ReceiveFromAsync(args); }
 						catch (Exception ex) { 
-							//Log.Debug(ex, "Error starting socket receive");
+							Log.Debug(ex, "Error starting socket receive");
 							return; 
 						}
 					}
@@ -662,7 +662,7 @@ namespace TSLib.Full
 			var wasRunning = Interlocked.Exchange(ref pingCheckRunning, 1);
 			if (wasRunning != 0)
 			{
-				//Log.Warn("Previous resend tick didn't finish");
+				Log.Warn("Previous resend tick didn't finish");
 				return;
 			}
 
@@ -701,7 +701,7 @@ namespace TSLib.Full
 				var elapsed = lastMessageTimer.Elapsed;
 				if (elapsed > PacketTimeout)
 				{
-					//LogTimeout.Debug("TIMEOUT: Got no ping packet response for {0}", elapsed);
+					LogTimeout.Debug("TIMEOUT: Got no ping packet response for {0}", elapsed);
 					Stop(Reason.Timeout);
 					return;
 				}
@@ -726,14 +726,14 @@ namespace TSLib.Full
 			// Check if the packet timed out completely
 			if (packet.FirstSendTime < now - PacketTimeout)
 			{
-				//LogTimeout.Debug("TIMEOUT: {0}", packet);
+				LogTimeout.Debug("TIMEOUT: {0}", packet);
 				return true;
 			}
 
 			// Check if we should retransmit a packet because it probably got lost
 			if (packet.LastSendTime < now - currentRto)
 			{
-				//LogTimeout.Debug("RESEND: {0}", packet);
+				LogTimeout.Debug("RESEND: {0}", packet);
 				currentRto += currentRto;
 				if (currentRto > MaxRetryInterval)
 					currentRto = MaxRetryInterval;
@@ -777,11 +777,13 @@ namespace TSLib.Full
 
 	internal static class PacketHandlerConst
 	{
-		//public static readonly Logger Log = LogManager.GetLogger("TSLib.PacketHandler");
+		public static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Get("TSLib.PacketHandler");
+		// Пер-пакетные логгеры (Rtt/Raw/RawVoice) намеренно выключены: их вызовы на горячем пути
+		// форматируют каждый голосовой пакет и убивают производительность. Не включать.
 		//public static readonly Logger LogRtt = LogManager.GetLogger("TSLib.PacketHandler.Rtt");
 		//public static readonly Logger LogRaw = LogManager.GetLogger("TSLib.PacketHandler.Raw");
 		//public static readonly Logger LogRawVoice = LogManager.GetLogger("TSLib.PacketHandler.Raw.Voice");
-		//public static readonly Logger LogTimeout = LogManager.GetLogger("TSLib.PacketHandler.Timeout");
+		public static readonly TSLib.Logging.Logger LogTimeout = TSLib.Logging.Logger.Get("TSLib.PacketHandler.Timeout");
 
 		/// <summary>Elapsed time since first send timestamp until the connection is considered lost.</summary>
 		public static readonly TimeSpan PacketTimeout = TimeSpan.FromSeconds(30);

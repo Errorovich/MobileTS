@@ -24,7 +24,7 @@ namespace TSLib
 	/// <summary>A shared function base between the query and full client.</summary>
 	public abstract partial class TsBaseFunctions : IDisposable
 	{
-		//protected readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		protected readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 		/// <summary>After the client disconnected.</summary>
 		public abstract event EventHandler<DisconnectEventArgs> OnDisconnected;
 

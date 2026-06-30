@@ -5,6 +5,7 @@ using Android.Widget;
 using AndroidX.Core.View;
 using AndroidX.DrawerLayout.Widget;
 using MobileTS.Activity.Log;
+using MobileTS.Logging;
 using MobileTS.Activity.Server;
 using MobileTS.Activity.ServersList;
 using MobileTS.Activity.Settings;
@@ -64,6 +65,13 @@ namespace MobileTS {
             // восстановит FragmentManager сам.
             if (savedInstanceState == null)
                 ShowRoot(new ServersFragment());
+
+            // Если активити перезапустил обработчик краша — показываем диалог о падении.
+            if (savedInstanceState == null && Intent?.HasExtra(CrashHandler.CrashExtra) == true) {
+                var crashPath = Intent.GetStringExtra(CrashHandler.CrashExtra);
+                Intent.RemoveExtra(CrashHandler.CrashExtra); // не повторять при повороте
+                CrashHandler.ShowCrashDialog(this, crashPath);
+            }
         }
 
         // ===================== Навигация =====================
@@ -105,6 +113,7 @@ namespace MobileTS {
 
         // Явное отключение (пункт «Отключиться» на экране сервера).
         public void DisconnectCurrent() {
+            AppLog.I("UI", "Отключение от сервера по запросу пользователя: " + _connectedAddress);
             StopService(new Intent(this, typeof(Services.ClientService)));
             _connectedTitle = "";
             _connectedAddress = "";

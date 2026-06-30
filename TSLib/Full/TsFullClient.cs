@@ -164,10 +164,10 @@ namespace TSLib.Full
 		{
 			scheduler.VerifyOwnThread();
 
-			//if (ctx != context)
-				//Log.Debug("Stray disconnect from old packethandler");
+			if (ctx != context)
+				Log.Debug("Stray disconnect from old packethandler");
 
-			//Log.Debug("ChangeState {0} -> {1} (error:{2})", status, setStatus, error?.ErrorFormat() ?? "none");
+			Log.Debug("ChangeState {0} -> {1} (error:{2})", status, setStatus, error?.ErrorFormat() ?? "none");
 
 			switch ((status, setStatus))
 			{
@@ -224,8 +224,8 @@ namespace TSLib.Full
 					//Log.Debug("[I] {0}", Tools.Utf8Encoder.GetString(packet.Data));
 				_ = scheduler.Invoke(() =>
 				{
-					//if (ctx != context)
-						//Log.Debug("Stray packet from old packethandler");
+					if (ctx != context)
+						Log.Debug("Stray packet from old packethandler");
 
 					var result = msgProc.PushMessage(data);
 					if (result != null)
@@ -252,9 +252,9 @@ namespace TSLib.Full
 				{
 					var errorNum = BinaryPrimitives.ReadUInt32LittleEndian(packet.Data.AsSpan(1));
 					if (!Enum.IsDefined(typeof(TsErrorCode), errorNum))
-						//Log.Info("Got init error: {0}", (TsErrorCode)errorNum);
-					//else
-						//Log.Warn("Got undefined init error: {0}", errorNum);
+						Log.Info("Got init error: {0}", (TsErrorCode)errorNum);
+					else
+						Log.Warn("Got undefined init error: {0}", errorNum);
 					_ = scheduler.Invoke(() => ChangeState(ctx, TsClientStatus.Disconnected));
 				}
 				break;
@@ -465,11 +465,11 @@ namespace TSLib.Full
 			}
 
 			var message = com.ToString();
-			//Log.Debug("[O] {0}", message);
+			//Log.Debug("[O] {0}", message); // дамп каждого исходящего сообщения — выключено (горячий путь)
 			byte[] data = Tools.Utf8Encoder.GetBytes(message);
 			var sendResult = context.PacketHandler.AddOutgoingPacket(data, PacketType.Command);
-			//if (!sendResult)
-				//Log.Debug("packetHandler couldn't send packet: {0}", sendResult.Error);
+			if (!sendResult)
+				Log.Debug("packetHandler couldn't send packet: {0}", sendResult.Error);
 			return R.Ok;
 		}
 

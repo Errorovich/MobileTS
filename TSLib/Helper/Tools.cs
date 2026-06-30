@@ -67,7 +67,7 @@ namespace TSLib.Helper
 
 		public static void SetLogId(Id id) => SetLogId(id.ToString());
 		public static void SetLogId(string id) {
-			//NLog.MappedDiagnosticsLogicalContext.Set("BotId", id);
+			TSLib.Logging.LogContext.Set(id);
 		}
 
 		public static Exception UnhandledDefault<T>(T value) where T : struct { return new MissingEnumCaseException(typeof(T).Name, value.ToString() ?? string.Empty); }

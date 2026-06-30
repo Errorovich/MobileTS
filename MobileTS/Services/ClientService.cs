@@ -3,12 +3,14 @@ using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using System.Text.Json;
+using MobileTS.Logging;
 
 namespace MobileTS.Services {
     [Service(ForegroundServiceType = ForegroundService.TypeMicrophone)]
     public class ClientService : Service {
         public override void OnCreate() {
             base.OnCreate();
+            AppLog.I("Service", "ClientService.OnCreate — старт foreground-сервиса");
             Client.Init(this);
             StartForeground(1, BuildNotification());
         }
@@ -18,6 +20,7 @@ namespace MobileTS.Services {
             var json = intent?.GetStringExtra("server_info");
             if (json != null) {
                 var server = JsonSerializer.Deserialize<ServerInfo>(json)!;
+                AppLog.I("Service", "OnStartCommand — подключение к " + server.Address);
 
                 // Пароли хранятся и передаются в открытом виде (без Crypto).
                 var serverPassword = server.ServerPassword;
@@ -45,6 +48,7 @@ namespace MobileTS.Services {
         }
 
         public override void OnDestroy() {
+            AppLog.I("Service", "ClientService.OnDestroy — остановка сервиса");
             // Снимаем foreground-состояние (и его уведомление/индикатор микрофона) сразу,
             // не дожидаясь завершения асинхронного Disconnect.
             StopForeground(StopForegroundFlags.Remove);

@@ -17,7 +17,7 @@ namespace TSLib
 {
 	internal abstract class BaseMessageProcessor
 	{
-		//protected static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+		protected static readonly TSLib.Logging.Logger Log = TSLib.Logging.Logger.Create();
 		protected readonly List<WaitBlock>[] dependingBlocks;
 		private readonly Func<string, NotificationType> findTypeOfNotification;
 		public Deserializer Deserializer { get; } = new Deserializer();
@@ -46,7 +46,7 @@ namespace TSLib
 			if (hasEqual || (ntfyType = findTypeOfNotification(notifyname)) == NotificationType.Unknown)
 			{
 				//if (!hasEqual)
-					//Log.Debug("Maybe unknown notification: {0}", notifyname);
+					Log.Debug("Maybe unknown notification: {0}", notifyname);
 				cmdLineBuffer = message;
 				return null;
 			}
@@ -59,7 +59,7 @@ namespace TSLib
 				var notification = Deserializer.GenerateNotification(lineDataPart, ntfyType);
 				if (notification is null)
 				{
-					//Log.Warn("Got unparsable message. ({0})", msgSpan.NewUtf8String());
+					Log.Warn("Got unparsable message. ({0})", msgSpan.NewUtf8String());
 					return null;
 				}
 
