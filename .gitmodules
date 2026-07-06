@@ -1,0 +1,3 @@
+[submodule "TSLib"]
+	path = TSLib
+	url = https://github.com/Errorovich/TSLib.git

@@ -7,11 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 An Android TeamSpeak voice client. Two projects in `MobileTS.sln`:
 
 - **MobileTS** — `net9.0-android` app (`OutputType=Exe`, min API 26). Uses the **native Android UI stack** (`Activity`, `Service`, `RecyclerView`, XML layouts in `Resources/layout/`) — *not* .NET MAUI / XAML. Bundles `libopus.so` per-ABI (`lib/<abi>/`).
-- **TSLib** — `net9.0` class library, a vendored copy of the TeamSpeak 3/5 client library from [Splamy/TS3AudioBot](https://github.com/Splamy/TS3AudioBot). Pinned to `LangVersion=8.0`. Treat as an upstream dependency: prefer changing MobileTS over editing TSLib.
+- **TSLib** — `net9.0` class library, a fork of the TeamSpeak 3/5 client library from [Splamy/TS3AudioBot](https://github.com/Splamy/TS3AudioBot), maintained as its own repo ([Errorovich/TSLib](https://github.com/Errorovich/TSLib)) and mounted here as a **git submodule** at `TSLib/`. It in turn has a nested submodule `TSLib/Declarations` ([ReSpeak/tsdeclarations](https://github.com/ReSpeak/tsdeclarations) — protocol declarations consumed by the T4 templates). Pinned to `LangVersion=8.0`. Treat as an upstream dependency: prefer changing MobileTS over editing TSLib; TSLib changes are committed/pushed in its own repo, then the submodule pointer is bumped here.
 
 Code comments and UI strings are mostly in Russian.
 
 ## Build / run
+
+Clone with submodules (or init them after a plain clone):
+
+```powershell
+git clone --recursive https://github.com/Errorovich/MobileTS.git
+git submodule update --init --recursive                # if already cloned without --recursive
+```
 
 No test project exists. Build via the .NET Android SDK:
 
