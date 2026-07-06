@@ -38,7 +38,7 @@ namespace MobileTS {
                 return;
 
             byte[]? bytes = await scheduler.InvokeAsync<byte[]?>(async () => {
-                int iconId = c.Book.Server.IconId;
+                int iconId = c.Book.Server.Icon;
                 if (iconId == 0)
                     return null;
                 try {

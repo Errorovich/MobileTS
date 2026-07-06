@@ -240,9 +240,9 @@ namespace MobileTS {
             // Чат текущего канала: входящие сообщения и очистка истории при переезде.
             HookChat(localClient);
 
-            // Имя сервера берём из initserver напрямую (ServerName), т.к. в Book оно затирается ником.
+            // Имя сервера берём из initserver напрямую (virtualserver_name -> Name).
             localClient.OnEachInitServer += (sender, e) => {
-                serverName = e.ServerName;
+                serverName = e.Name;
                 OnBookChanged?.Invoke();
                 // Иконка сервера доступна после initserver — качаем и кэшируем на диск.
                 _ = DownloadServerIcon();
