@@ -104,6 +104,21 @@ The codegen covers all *incoming* protocol surface automatically (message fields
 - **All calls into the client must go through `Client.Invoke(...)`**, which marshals the lambda onto the scheduler thread and unwraps TSLib's `R<T,CommandError>` result type into `(bool ok, T[] data)`. Do not call `TsFullClient` methods directly from Activity/UI code.
 - UI observes connection state via `TsFullClient.OnStatusChangedEvent` (`TsClientStatus`) and ready-state via `Client.SubscribeInstance` / `OnInstanceReady`. Marshal back to the UI thread with `Activity.RunOnUiThread`.
 
+### TSLib capabilities not yet surfaced in the app (audited 2026-07-06)
+
+The app exercises only a small slice of the TSLib command surface ([TsFullClient.cs](TSLib/Full/TsFullClient.cs) + [TsBaseFunctions.cs](TSLib/TsBaseFunctions.cs)). **What's wired up today:** `Connect`/`Disconnect`; plain voice send/receive; `clientupdate` for mic/sound mute + AFK (raw `SendVoid`, see the gaps note above); `ClientMove` **of self only** ([Client.cs](MobileTS/Client/Client.cs)); `SendChannelMessage`; `DownloadFile` **only** for the server icon ([Client.Icons.cs](MobileTS/Client/Client.Icons.cs)); and read-only `Book` (channel/client tree) via `OnEach*` notifications. Everything below is provided by the library but has **no UI/seam path** — reach for these before writing new protocol code:
+
+- **Voice:** whisper (`SendAudioWhisper` / `SendAudioGroupWhisper`, i.e. `TargetSendMode.Whisper`/`WhisperGroup`) — we always talk to the current channel only; talk power (`RequestTalkPower` / `CancelTalkPowerRequest`); `ChangeIsChannelCommander`.
+- **Moderation/admin (none implemented):** `KickClientFromServer`/`KickClientFromChannel`, `BanClient`, `ClientMove` of **other** clients, `PokeClient`, server/channel groups (`ServerGroupAdd`/`AddClient`/`DelClient`/`AddPerm`, `ChannelGroupAddClient`), `PrivilegeKeyUse`.
+- **Channel management (none):** `ChannelCreate`, `ChannelEdit`, `ChannelDelete`, `ChannelMove`. The tree is read-only.
+- **Text messaging (1 of 4 modes):** only `TextMessageTargetMode.Channel`. Missing `SendPrivateMessage`, `SendServerMessage`, `SendGlobalMessage`.
+- **Profile/identity:** `ChangeName` (nick is set at connect only, not editable in-app), `ChangeDescription`, `ChangeBadges`, `UploadAvatar`/`DeleteAvatar`.
+- **Info queries:** `GetClientConnectionInfo` (ping/packet loss/traffic — surfaced nowhere), `ClientInfo`/`GetClientVariables`, `GetServerVariables`/`GetServerConnectionInfo`, UID↔clid↔name resolvers (`GetClientDbIdFromUid`/`GetClientUidFromClientId`/`GetClientNameFromUid`/`GetClientIds`), `ClientDbInfo`, `ServerGroupsByClientDbId`, `PermOverview`.
+- **File transfer:** a full API exists (`FileTransferGetFileList`/`GetFileInfo`/`List`, `UploadFile`/`DownloadFile`, `FileTransferCreateDirectory`/`DeleteFile`/`RenameFile`) — used only to fetch the server icon. No channel file browser.
+- **Plugin commands:** `SendPluginCommand` / `PluginCommand` (handler exists in TSLib, unused by UI).
+
+**Not actually missing** — don't chase these: the full client does **not** answer server-query commands `ClientList`/`ChannelList`/`ChannelInfo`; that data comes from `Book` instead (see [Client.cs](MobileTS/Client/Client.cs) `GetBookSnapshot`).
+
 ### Audio pipeline
 
 Audio flows through a chain of `IAudioPipe` segments (`.Chain(...)` / `.Into(...)` from TSLib, see [AudioInterfaces.cs](TSLib/Audio/AudioInterfaces.cs)). The chain is wired in `Client.ClientThread`:
