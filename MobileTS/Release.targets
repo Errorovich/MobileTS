@@ -1,0 +1,109 @@
+<Project>
+  <!--
+    Релизная матрица APK средствами MSBuild (замена бывшего scripts/build-release.ps1).
+
+      dotnet build MobileTS/MobileTS.csproj -t:ReleaseArm64      # только arm64-v8a (реальные телефоны)
+      dotnet build MobileTS/MobileTS.csproj -t:ReleaseX64        # только x86_64 (эмуляторы)
+      dotnet build MobileTS/MobileTS.csproj -t:ReleaseUniversal  # обе ABI в одном пакете
+      dotnet build MobileTS/MobileTS.csproj -t:ReleaseAll        # все три варианта подряд
+
+    Готовые подписанные APK складываются в dist/ как MobileTS-<версия>-<abi>.apk.
+    Подпись — как у обычного Release: из MobileTS/signing.props, без него — авто-debug-ключ.
+
+    AOT по умолчанию выключен (как в старом скрипте); включается -p:RunAOTCompilation=true.
+    versionCode у всех вариантов один — для сайдлоада это нормально (ставится один APK).
+    Для Google Play multi-APK каждому варианту нужен СВОЙ versionCode: -p:ApplicationVersion=<n>.
+
+    Сужение до одной ABI — через -p:AbiTarget (см. комментарий у RuntimeIdentifiers в csproj:
+    глобальный -p:RuntimeIdentifiers протёк бы в TSLib и уронил его сборку).
+
+    Каждый вариант запускается ОТДЕЛЬНЫМ процессом dotnet build (через Exec), а не задачей
+    <MSBuild>: Android SDK кэширует данные о сжатии сборок на сессию MSBuild (по пути проекта),
+    и две сборки с разными RuntimeIdentifiers в одной сессии падают с XABLD7009
+    («compression assembly info for architecture ... not available»).
+  -->
+
+  <PropertyGroup>
+    <ReleaseDistDir>$(MSBuildThisFileDirectory)..\dist\</ReleaseDistDir>
+    <!-- Явное RunAOTCompilation=false, чтобы вариант не зависел от дефолтов SDK;
+         -p:RunAOTCompilation=true с командной строки перекрывает (подхватывается здесь же). -->
+    <_ReleaseAot>$(RunAOTCompilation)</_ReleaseAot>
+    <_ReleaseAot Condition="'$(_ReleaseAot)' == ''">false</_ReleaseAot>
+    <!-- ApplicationVersion пробрасывается явно: Exec не наследует -p:... внешнего вызова. -->
+    <_ReleaseBuildCmd>dotnet build &quot;$(MSBuildProjectFullPath)&quot; -t:_BuildReleaseVariant -nologo -p:Configuration=Release -p:AndroidPackageFormat=apk -p:RunAOTCompilation=$(_ReleaseAot) -p:ApplicationVersion=$(ApplicationVersion)</_ReleaseBuildCmd>
+  </PropertyGroup>
+
+  <Target Name="ReleaseArm64">
+    <Exec Command="$(_ReleaseBuildCmd) -p:AbiTarget=android-arm64 -p:_AbiName=arm64-v8a -p:_ExpectedAbis=arm64-v8a" />
+  </Target>
+
+  <Target Name="ReleaseX64">
+    <Exec Command="$(_ReleaseBuildCmd) -p:AbiTarget=android-x64 -p:_AbiName=x86_64 -p:_ExpectedAbis=x86_64" />
+  </Target>
+
+  <!-- Универсальный: AbiTarget не передаётся, берётся дефолтный RuntimeIdentifiers
+       из csproj (android-arm64;android-x64). -->
+  <!-- Разделитель ABI в _ExpectedAbis — «+»: и «;», и «,» MSBuild трактует
+       как разделители пар имя=значение в -p:. -->
+  <Target Name="ReleaseUniversal">
+    <Exec Command="$(_ReleaseBuildCmd) -p:_AbiName=universal -p:_ExpectedAbis=arm64-v8a+x86_64" />
+  </Target>
+
+  <Target Name="ReleaseAll" DependsOnTargets="ReleaseArm64;ReleaseX64;ReleaseUniversal" />
+
+  <!-- Внутренний таргет одного варианта: выполняется в отдельном экземпляре проекта
+       (Configuration=Release + AbiTarget для одиночных ABI). Все варианты пишут APK в один и тот же
+       bin/Release/net9.0-android/, поэтому копируем в dist/ сразу после сборки, до следующего варианта. -->
+  <Target Name="_BuildReleaseVariant" DependsOnTargets="SignAndroidPackage">
+    <PropertyGroup>
+      <_VariantApk>$(OutputPath)$(ApplicationId)-Signed.apk</_VariantApk>
+      <_VariantDest>$(ReleaseDistDir)MobileTS-$(ApplicationDisplayVersion)-$(_AbiName).apk</_VariantDest>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_VariantApk)')" Text="Не найден подписанный APK: $(_VariantApk) (вариант '$(_AbiName)')." />
+    <!-- Самопроверка: в APK должны лежать ровно ожидаемые lib/<abi>/ (иначе сужение ABI не сработало). -->
+    <_VerifyApkAbis ApkPath="$(_VariantApk)" ExpectedAbis="$(_ExpectedAbis)" Variant="$(_AbiName)" />
+    <MakeDir Directories="$(ReleaseDistDir)" />
+    <Copy SourceFiles="$(_VariantApk)" DestinationFiles="$(_VariantDest)" />
+    <Message Importance="high" Text="dist: MobileTS-$(ApplicationDisplayVersion)-$(_AbiName).apk" />
+  </Target>
+
+  <!-- Проверка ABI (папок lib/<abi>/) внутри APK + вывод размера. Ошибка проверки валит сборку. -->
+  <UsingTask TaskName="_VerifyApkAbis" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <ApkPath ParameterType="System.String" Required="true" />
+      <ExpectedAbis ParameterType="System.String" Required="true" />
+      <Variant ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Linq" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        string[] expected = ExpectedAbis.Split(new[] { '+', ',' }).Select(a => a.Trim()).OrderBy(a => a, StringComparer.Ordinal).ToArray();
+        string[] got;
+        using (var fs = File.OpenRead(ApkPath))
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Read))
+        {
+            got = zip.Entries
+                .Where(e => e.FullName.StartsWith("lib/", StringComparison.Ordinal) && e.FullName.Count(c => c == '/') >= 2)
+                .Select(e => e.FullName.Split('/')[1])
+                .Distinct()
+                .OrderBy(a => a, StringComparer.Ordinal)
+                .ToArray();
+        }
+        double mb = Math.Round(new FileInfo(ApkPath).Length / 1048576.0, 2);
+        if (!expected.SequenceEqual(got))
+        {
+            Log.LogError("Вариант '{0}': ожидались ABI [{1}], в APK найдены [{2}] ({3}).",
+                Variant, string.Join(", ", expected), string.Join(", ", got), ApkPath);
+        }
+        else
+        {
+            Log.LogMessage(MessageImportance.High, "Вариант '{0}': ABI [{1}] — ок, {2} MB.",
+                Variant, string.Join(", ", got), mb);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+</Project>

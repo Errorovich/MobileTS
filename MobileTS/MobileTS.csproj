@@ -35,7 +35,7 @@
   <Import Project="$(MSBuildThisFileDirectory)signing.props" Condition="Exists('$(MSBuildThisFileDirectory)signing.props')" />
 
   <!-- Набор ABI релизной сборки. По умолчанию обе (универсальный APK). Для отдельной сборки под
-       одну архитектуру передай -p:AbiTarget=android-arm64 (или android-x64) — см. scripts/build-release.ps1.
+       одну архитектуру передай -p:AbiTarget=android-arm64 (или android-x64) — см. Release.targets.
        Почему через своё свойство AbiTarget, а не напрямую -p:RuntimeIdentifiers: глобальное
        RuntimeIdentifiers из командной строки протекает в TSLib (net9.0) и роняет его сборку (MSB3030);
        AbiTarget же читает только этот проект. Только для Release — Debug деплоится через -t:Run как есть. -->
@@ -65,4 +65,8 @@
     <PackageReference Include="Xamarin.AndroidX.DrawerLayout" Version="1.2.0.20" />
     <PackageReference Include="Xamarin.AndroidX.RecyclerView" Version="1.4.0.4" />
   </ItemGroup>
+
+  <!-- Релизная матрица APK (per-ABI + universal -> dist/): таргеты ReleaseArm64 / ReleaseX64 /
+       ReleaseUniversal / ReleaseAll, запуск через dotnet build -t:<таргет>. См. Release.targets. -->
+  <Import Project="$(MSBuildThisFileDirectory)Release.targets" />
 </Project>

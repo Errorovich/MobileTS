@@ -52,18 +52,22 @@ dotnet publish MobileTS/MobileTS.csproj -c Release -f net9.0-android -p:AndroidP
 - Release uses `TrimMode=full`; smoke-test on a real device after publishing (full trimming can break reflection paths that Debug tolerates — e.g. `System.Text.Json` reflection is stripped, so serialized types need a source-generated `JsonSerializerContext`, see [AppJsonContext.cs](MobileTS/AppJsonContext.cs)). Verify the package with the SDK build-tools: `apksigner verify <apk>`.
 - Reinstalling over an install of the **same** id with a **different** key fails on signature mismatch — uninstall first (this wipes `SharedPreferences`: saved servers + identity). Debug and Release have different ids, so they don't trigger this against each other.
 
-#### Per-ABI & universal APKs ([scripts/build-release.ps1](scripts/build-release.ps1))
+#### Per-ABI & universal APKs (MSBuild targets in [MobileTS/Release.targets](MobileTS/Release.targets))
 
 ```powershell
-pwsh scripts/build-release.ps1                 # all three -> dist/
-pwsh scripts/build-release.ps1 -Targets arm64  # one variant; -Aot for AOT
+dotnet build MobileTS/MobileTS.csproj -t:ReleaseAll        # all three -> dist/
+dotnet build MobileTS/MobileTS.csproj -t:ReleaseArm64      # arm64-v8a only (phones)
+dotnet build MobileTS/MobileTS.csproj -t:ReleaseX64        # x86_64 only (emulators)
+dotnet build MobileTS/MobileTS.csproj -t:ReleaseUniversal  # both ABIs in one APK
 ```
 
-Builds into `dist/` (gitignored): `MobileTS-<ver>-arm64-v8a.apk` (~7.5 MB), `…-x86_64.apk` (~7.6 MB), `…-universal.apk` (~12.8 MB, both ABIs). The single-ABI builds roughly halve the universal size by dropping the other ABI's native libs + assembly blob.
+Builds into `dist/` (gitignored): `MobileTS-<ver>-arm64-v8a.apk` (~7.5 MB), `…-x86_64.apk` (~7.6 MB), `…-universal.apk` (~12.8 MB, both ABIs). The single-ABI builds roughly halve the universal size by dropping the other ABI's native libs + assembly blob. AOT is off by default; add `-p:RunAOTCompilation=true` (forwarded to the variant builds).
 
 - **ABI selection is driven by `-p:AbiTarget=android-arm64|android-x64`, a project-local property** — *not* `-p:RuntimeIdentifier(s)` directly. Two traps this avoids: (1) a singular `-p:RuntimeIdentifier` does **not** narrow Android ABIs (the ABI set comes from the *plural* `RuntimeIdentifiers`); (2) passing `-p:RuntimeIdentifiers` globally leaks the RID into the `TSLib` (`net9.0`) project reference and breaks it (`MSB3030`). The csproj maps `AbiTarget` → `RuntimeIdentifiers` for the app only (Release-conditioned, so Debug `-t:Run` is untouched); the universal build passes no `AbiTarget` and uses the default `android-arm64;android-x64`.
-- All variants emit to the same `bin/Release/net9.0-android/publish/`, so the script builds sequentially and copies after each; it then re-opens each APK and asserts the `lib/<abi>/` folders match the expected ABI before accepting it.
-- **versionCode is the same** across variants — fine for sideloading (you install one). For a Play multi-APK track each ABI needs a distinct, ordered `versionCode` (pass `-p:ApplicationVersion=<n>`).
+- **Each variant runs in its own `dotnet build` child process (`Exec`), not via the `<MSBuild>` task**: the Android SDK caches assembly-compression info per MSBuild *session* keyed by project path, so two builds with different `RuntimeIdentifiers` in one session die with `XABLD7009` ("compression assembly info for architecture … not available").
+- All variants emit to the same `bin/Release/net9.0-android/`, so `_BuildReleaseVariant` copies each APK into `dist/` right after its build; an inline `_VerifyApkAbis` task (RoslynCodeTaskFactory) re-opens the APK and fails the build unless the `lib/<abi>/` folders match the expected ABI set exactly.
+- The SDK's own `AndroidCreatePackagePerAbi=true` would do per-ABI splits in one go, but it's deprecated (warning `XA1037`, slated for removal in .NET 10) — don't switch to it.
+- **versionCode is the same** across variants — fine for sideloading (you install one). For a Play multi-APK track each ABI needs a distinct, ordered `versionCode` (pass `-p:ApplicationVersion=<n>`; it is explicitly forwarded to the child builds).
 
 ### TSLib code generation (T4 / `.tt`)
 
