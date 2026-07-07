@@ -222,7 +222,7 @@ namespace MobileTS.Activity.Settings {
                 if (read <= 0)
                     continue;
 
-                float peak = AudioLevel.Peak(buffer.AsSpan(0, read));
+                float peak = AudioTools.Peak(buffer.AsSpan(0, read));
                 // Плавное падение полоски, как в Discord: вверх резко, вниз — постепенно.
                 display = Math.Max(peak, display * 0.8f);
 
