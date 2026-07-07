@@ -2,7 +2,8 @@
 
 Дата аудита: **2026-07-06**. TSLib таргетит `net9.0`, `Nullable=enable`.
 
-> **Статус:** механические блоки аудита (мёртвые `#if`-ветки, пакеты-полифиллы, `SHA*.HashData`, `Random.Shared`, `FixedTimeEquals`, `RandomNumberGenerator.Fill`, `MemoryExtensions.Trim`, Unix-время через `DateTimeOffset`) **выполнены 2026-07-07** (коммиты TSLib `848f10a`, `5e115f4`), пин `LangVersion=8.0` снят (`f70196a`), **подключение на устройстве прогнано — работает**. Ниже только оставшиеся пункты.
+> **Статус:** механические блоки аудита (мёртвые `#if`-ветки, пакеты-полифиллы, `SHA*.HashData`, `Random.Shared`, `FixedTimeEquals`, `RandomNumberGenerator.Fill`, `MemoryExtensions.Trim`, Unix-время через `DateTimeOffset`) **выполнены 2026-07-07** (коммиты TSLib `848f10a`, `5e115f4`), пин `LangVersion=8.0` снят (`f70196a`), **подключение на устройстве прогнано — работает**.
+> **Вторая волна 2026-07-07:** Newtonsoft → System.Text.Json + `readonly record struct` для ID-обёрток (правка `Types.gen.tt` + регенерация T4, коммит `50a4777`), file-scoped namespaces во всех 72 рукописных файлах (`2eedaa3`). Генерённые `.gen.cs` остальных модулей по-прежнему с block-namespace — их стиль задают шаблоны, конверсия отложена. **Прогон на устройстве после второй волны ещё не делался.** Ниже только оставшиеся пункты.
 
 Порядок внедрения: правки делаются в репозитории TSLib ([Errorovich/TSLib](https://github.com/Errorovich/TSLib)), затем в MobileTS бампается указатель сабмодуля. Каждая правка — отдельным коммитом со своим прогоном на устройстве.
 
@@ -22,30 +23,19 @@
 
 **Проблемы:** меняется модель потоков (dedicated thread → async-цикл читателя); необходимо сохранить **строгий порядок доставки нотификаций** и то, на каком потоке исполняются обработчики (приложение маршалит в UI само, но порядок важен для `Book`). Средний риск.
 
-### 1.3. `Newtonsoft.Json` → `System.Text.Json`
-
-Единственное использование Newtonsoft в TSLib — 6 реализаций `JsonConverter<T>` для ID-обёрток в `Types.gen.cs` (генерируется из `Types.gen.tt`).
-
-**Проблемы:**
-- правится **шаблон** `Types.gen.tt`, не сгенерированный файл; регенерация T4 с известными нюансами (движок VS2022 глотает newline после inline-`<# #>`, шаблоны строго CRLF — см. README TSLib);
-- API конвертеров STJ другой (`Read/Write(Utf8JsonReader/Writer)`);
-- проверить потребителей: MobileTS уже на STJ source-gen (`AppJsonContext`) из-за `TrimMode=full` — если приложение нигде не сериализует TSLib-типы через Newtonsoft, уход от него **снимает потенциальный trim-риск** и убирает ~700 КБ зависимости из APK (если Newtonsoft не вытримливается целиком).
-
-**Выигрыш:** минус целая зависимость. Стоит делать при следующей регенерации T4 — и совместить с переводом ID-обёрток на `readonly record struct` (см. п. 2), раз всё равно трогается шаблон.
-
-### 1.4. `TsString.IsDoubleChar` / `TokenLength` → `SearchValues<byte>`
+### 1.3. `TsString.IsDoubleChar` / `TokenLength` → `SearchValues<byte>`
 
 `SearchValues<byte>.Create(...)` + `Contains` (net8+, векторизовано внутри BCL, кроссплатформенно — важно для ARM64 на Android). Убрать LINQ `str.Count(IsDoubleChar)` в `TokenLength` (аллокация делегата) — ручной цикл или `span.Count`. Мёртвый SSE2-путь уже удалён (2026-07-07).
 
 **Проблемы:** замерить до/после; путь горячий при экранировании исходящих команд, но не критичный.
 
-### 1.5. `TsCrypt.GetLeadingZeroBits`
+### 1.4. `TsCrypt.GetLeadingZeroBits`
 
 Ручной побайтовый/побитовый скан SHA1-дайджеста в брутфорсе уровня безопасности identity (`ImproveSecurity`) → чтение 8-байтовыми блоками `BinaryPrimitives.ReadUInt64BigEndian` + `BitOperations.LeadingZeroCount`.
 
 **Проблемы:** дайджест 20 байт — не кратен 8, аккуратно с хвостом; нужен паритет-тест на случайных входах против старой реализации. Греет только генерацию/улучшение identity — редкая операция, приоритет низкий.
 
-### 1.6. `PacketHandler.cs` — сетевой слой (самая рискованная правка)
+### 1.5. `PacketHandler.cs` — сетевой слой (самая рискованная правка)
 
 - Приём: ручной `SocketAsyncEventArgs` + callback `FetchPacketEvent` → `await socket.ReceiveFromAsync(Memory<byte>, ...)` в цикле (`ValueTask`-перегрузки, net5+).
 - Отправка: синхронный `socket.SendTo` в `SendRaw` → `SendToAsync(ReadOnlyMemory<byte>, ...)`.
@@ -57,13 +47,12 @@
 
 ## 2. Новый синтаксис (LangVersion теперь по умолчанию C# 13)
 
-Внедрять оппортунистически, по мере правок соседнего кода, без big-bang-реформата:
+Внедрять оппортунистически, по мере правок соседнего кода, без big-bang-реформата. Выполнено 2026-07-07: `readonly record struct` для ID-обёрток, file-scoped namespaces (рукописные файлы; генерённые модули кроме Types — при конверсии их шаблонов). Осталось:
 
 | Фича | Где применимо | Ценность |
 |---|---|---|
-| `readonly record struct` (C# 10) | ID-обёртки в `Types.gen.cs` (`ClientId`, `ChannelId`, `Uid`, …) — сейчас шаблон `Types.gen.tt` генерирует ручные `Equals`/`GetHashCode`/операторы | **Самая осязаемая**: сильно ужимает шаблон и генерённый код; совместить с п. 1.3 (Newtonsoft) |
 | `is not null`, паттерны `and`/`or`/`not` (C# 9) | Повсеместно вместо `!(x is null)` и цепочек сравнений | Читаемость, механическая замена |
-| File-scoped namespaces (C# 10) | Все файлы: минус уровень отступа | Косметика; если делать — одним механическим коммитом, диф большой |
+| File-scoped namespaces в шаблонах | `.gen.tt`/`.ttinclude` остальных модулей (Book, Messages, M2B, …) + регенерация | Косметика; аккуратно с зашитыми в шаблоны отступами |
 | Target-typed `new()` (C# 9), collection expressions `[]` (C# 12) | Инициализаторы полей | Косметика |
 | UTF-8 литералы `"…"u8` (C# 11) | `TsCrypt.Ts3InitMac`, `TsIdentityObfuscationKey` | Малая: обе константы и так статические, считаются один раз |
 | `params ReadOnlySpan<T>` (C# 13) | Хелперы построения команд (`TsCommand`) | Убирает аллокации массивов на вызовах; точечно |
