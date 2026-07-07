@@ -24,7 +24,7 @@ namespace MobileTS {
         /// Срабатывает, когда клиент начинает/прекращает говорить. Подписка живёт между
         /// переподключениями: каждый новый конвейер пробрасывает события сюда.
         /// </summary>
-        public static event Action<VoiceActivationTrackerPipe.ClientVoiceStatus>? OnClientIsTalkingChanged;
+        public static event Action<TalkingTrackerPipe.ClientVoiceStatus>? OnClientIsTalkingChanged;
 
         /// <summary>
         /// Срабатывает на потоке планировщика, когда в <see cref="TsFullClient.Book"/> изменилось
@@ -195,7 +195,7 @@ namespace MobileTS {
             localAudio.OnLocalTalkingChanged += active => {
                 var me = client?.ClientId ?? ClientId.Null;
                 SetClientTalking(me, active);
-                OnClientIsTalkingChanged?.Invoke(new VoiceActivationTrackerPipe.ClientVoiceStatus(me, active));
+                OnClientIsTalkingChanged?.Invoke(new TalkingTrackerPipe.ClientVoiceStatus(me, active));
             };
             localAudio.Build(
                 localClient,

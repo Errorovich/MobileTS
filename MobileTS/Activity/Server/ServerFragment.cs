@@ -7,6 +7,7 @@ using Android.Widget;
 using AndroidX.RecyclerView.Widget;
 using MobileTS.Audio;
 using TSLib;
+using TSLib.Audio;
 using BookChannel = TSLib.Full.Book.Channel;
 using BookClient = TSLib.Full.Book.Client;
 
@@ -266,7 +267,7 @@ namespace MobileTS.Activity.Server {
                 _adapter.NotifyItemChanged(index);
         }
 
-        private void OnClientTalkingChanged(VoiceActivationTrackerPipe.ClientVoiceStatus status) {
+        private void OnClientTalkingChanged(TalkingTrackerPipe.ClientVoiceStatus status) {
             Activity?.RunOnUiThread(() => {
                 _adapter.RecolorClient(status.Id);
                 RecolorChatCard(status.Id);

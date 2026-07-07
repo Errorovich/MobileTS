@@ -22,12 +22,12 @@ namespace MobileTS {
             private PushToTalkPipe? pushToTalkPipe;
             private EncoderPipe? encoderPipe;
             // Воспроизведение
-            private VoiceActivationTrackerPipe? trackerPipe;
+            private TalkingTrackerPipe? trackerPipe;
             private MutePipe? soundMutePipe;
             private AudioTrackPipe? trackPipe;
 
             // Пробрасываем «кто говорит» наружу (для подсветки клиентов в ServerFragment).
-            public event Action<VoiceActivationTrackerPipe.ClientVoiceStatus>? OnClientIsTalkingChanged;
+            public event Action<TalkingTrackerPipe.ClientVoiceStatus>? OnClientIsTalkingChanged;
 
             // Срабатывает, когда МОЙ микрофон начинает/прекращает передавать (VAD открыт либо
             // зажата кнопка PTT, и при этом микрофон не заглушён) — для подсветки своего пользователя.
@@ -54,7 +54,7 @@ namespace MobileTS {
 
                 // Воспроизведение: клиент → декодер → трекер → mute → динамик.
                 DecoderPipe decoderPipe = client.Chain(new DecoderPipe());
-                trackerPipe = decoderPipe.Chain(new VoiceActivationTrackerPipe());
+                trackerPipe = decoderPipe.Chain(new TalkingTrackerPipe());
                 soundMutePipe = trackerPipe.Chain(new MutePipe());
                 trackPipe = soundMutePipe.Chain(new AudioTrackPipe());
 
