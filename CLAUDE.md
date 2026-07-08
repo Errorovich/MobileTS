@@ -91,18 +91,19 @@ The codegen covers all *incoming* protocol surface automatically (message fields
 - **`TsEnums.LicenseType` is stale**: declarations renumbered it (`1=Offline … 10=Commercial`); TsEnums still has the old `1=Athp, 2=Lan, 3=Npl, 4=Unknown`, so `Book.Server.License` labels are wrong. [License.cs](TSLib/Full/License.cs) has a second, *correct* `ServerLicenseType` — duplicated enums that drifted apart. Five-minute fix when needed.
 - **`plugincmd`**: new optional `target` parameter not supported by the wrapper.
 - **`Badges.csv`** (badge GUID→name catalog) unused; raw `Client.Badges` string is in Book.
-- `clientinit` gained optional `client_input_muted?/output_muted?/away?` (initial state at join) — the hand-written `ClientInit` in [TsFullClient.cs](TSLib/Full/TsFullClient.cs) doesn't send them.
+- `clientinit` gained optional `client_input_muted?/output_muted?/away?` (initial state at join) — the hand-written `FullClientHandshake.BuildClientInit` ([FullClientHandshake.cs](TSLib/Full/FullClientHandshake.cs)) doesn't send them.
 - Low-level protocol is current: `Init127` handshake-restart is handled, `ot=1` is sent in `clientinitiv`. `License.cs` parses only block types 0/2/32 (enough for normal TS3 chains; TS5-format license blocks would fail).
 
 ## Architecture
 
 ### App → library bridge: the static `Client` class
 
-[Client.cs](MobileTS/Client.cs) is the single seam between the Android app and TSLib. It owns the one `TsFullClient` instance and the dedicated thread it runs on:
+[Client.cs](MobileTS/Client.cs) is the single seam between the Android app and TSLib. It owns the one `TsFullClient` instance:
 
-- `TsFullClient` is **single-threaded by contract**: it must only be touched from its own `DedicatedTaskScheduler` thread (TSLib's [DedicatedTaskScheduler](TSLib/Scheduler/DedicatedTaskScheduler.cs)). `Client.Connect` spins up a `Thread`, calls `DedicatedTaskScheduler.FromCurrentThread`, and constructs the client there.
-- **All calls into the client must go through `Client.Invoke(...)`**, which marshals the lambda onto the scheduler thread and unwraps TSLib's `R<T,CommandError>` result type into `(bool ok, T[] data)`. Do not call `TsFullClient` methods directly from Activity/UI code.
-- UI observes connection state via `TsFullClient.OnStatusChangedEvent` (`TsClientStatus`) and ready-state via `Client.SubscribeInstance` / `OnInstanceReady`. Marshal back to the UI thread with `Activity.RunOnUiThread`.
+- **`TsFullClient` API is thread-safe** (since the 2026-07-08 refactor): `Connect`/`Disconnect` and all command methods marshal themselves onto the client's own `DedicatedTaskScheduler` thread — call them directly from UI/service code and await the result. `new TsFullClient()` owns its scheduler thread; `Client.Disconnect` disposes it (`Dispose` also stops that thread).
+- **`Book` may only be read on the client thread** — use `TsFullClient.Invoke(...)` (see `Client.GetBookSnapshot`). Events (`OnEach*`, `OnStatusChangedEvent`) are raised on the client thread. The voice path (`Write`/`SendAudio*`) is lock-based and never marshals — audio pipes call it directly.
+- TSLib-side layout: connection state machine + send core in [TsFullClient.cs](TSLib/Full/TsFullClient.cs); per-connection state in `ConnectionContext.cs`; crypto handshake in `FullClientHandshake.cs`; voice framing in `VoicePacket.cs`; command wrappers in `TsFullClient.Commands.cs`; `TsClientStatus` is a namespace-level enum in `TSLib.Full`.
+- UI observes connection state via `TsFullClient.OnStatusChangedEvent` (`TsClientStatus`) and ready-state via `Client.SubscribeInstance` / `OnInstanceReady`. Marshal back to the UI thread with `Activity.RunOnUiThread`. Note: a no-op `Disconnected → Disconnected` transition still raises `OnStatusChangedEvent`, so `Disconnected` can fire more than once per connection — handlers must be idempotent.
 
 ### TSLib capabilities not yet surfaced in the app (audited 2026-07-06)
 
