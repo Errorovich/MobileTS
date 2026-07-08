@@ -130,7 +130,7 @@ namespace MobileTS {
         public static void SendChannelChat(string text) {
             if (string.IsNullOrWhiteSpace(text))
                 return;
-            _ = Invoke(c => c.SendChannelMessage(text));
+            _ = client?.SendChannelMessage(text);
         }
 
         private static void AddChat(ChatMessage msg) {

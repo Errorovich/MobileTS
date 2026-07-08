@@ -12,8 +12,6 @@ using TSLib.Audio;
 using TSLib.Audio.Opus;
 using TSLib.Commands;
 using TSLib.Full;
-using TSLib.Messages;
-using TSLib.Scheduler;
 
 namespace MobileTS {
     internal static partial class Client {
@@ -81,10 +79,8 @@ namespace MobileTS {
                 talkingClients[id] = talking;
         }
 
-        private static Thread? clientThread;
         private static TsFullClient? client;
         private static ContextWrapper? context;
-        private static DedicatedTaskScheduler? clientScheduler;
 
         // Весь аудиоконвейер клиента (захват + воспроизведение + управление активацией/заглушками).
         private static Audio? audio;
@@ -145,7 +141,7 @@ namespace MobileTS {
 
         public static void Connect(string address, string? nickname = null, string? serverPassword = null, string? defaultChannel = null, string? defaultChannelPassword = null) {
             // Защита от повторного подключения поверх живого соединения (утечка потока/микрофона).
-            if (client != null || clientThread != null) {
+            if (client != null) {
                 AppLog.W("Client", "Connect проигнорирован: соединение уже активно");
                 return;
             }
@@ -158,7 +154,7 @@ namespace MobileTS {
             AppLog.I("Client", "Подключение к " + address + " (ник: " + (nickname ?? "Guest") + ")");
 
             // Новая сессия — снимаем флаг дисконнекта (предыдущая очистка к этому моменту завершена,
-            // т.к. client/clientThread выше уже null).
+            // т.к. client выше уже null).
             disconnecting = 0;
             currentAddress = address;
             // AFK — глобальная настройка: восстанавливаем тумблер из сохранённого состояния.
@@ -172,17 +168,15 @@ namespace MobileTS {
                 serverPassword == null ? Password.Empty : Password.FromPlain(serverPassword),
                 defaultChannel,
                 defaultChannelPassword == null ? Password.Empty : Password.FromPlain(defaultChannelPassword));
-            clientThread = new Thread(() => {
-                // ClientThread — async; продолжения после await пампятся тем же планировщиком в DoWork.
-                DedicatedTaskScheduler.FromCurrentThread(() => _ = ClientThread(conData));
-            });
-            clientThread.Start();
+
+            // Клиент сам владеет выделенным потоком планировщика; его API потокобезопасно,
+            // поэтому подключение — обычный async-метод с любого потока.
+            var localClient = new TsFullClient();
+            client = localClient;
+            _ = ConnectAsync(localClient, conData);
         }
 
-        private static async Task ClientThread(ConnectionDataFull conData) {
-            clientScheduler = (DedicatedTaskScheduler)TaskScheduler.Current;
-            var localClient = new TsFullClient(clientScheduler);
-            client = localClient;
+        private static async Task ConnectAsync(TsFullClient localClient, ConnectionDataFull conData) {
 
             // Весь аудиоконвейер вынесен в Client.Audio. Режим активации, порог и задержку
             // деактивации берём из настроек.
@@ -265,8 +259,8 @@ namespace MobileTS {
                 ? "Подключение установлено: " + (currentAddress ?? "")
                 : "Подключение не удалось: " + (currentAddress ?? ""));
 
-            // Сообщаем серверу восстановленное состояние звука/AFK (мы на потоке планировщика —
-            // вызываем клиент напрямую), чтобы остальные участники сразу видели наши иконки.
+            // Сообщаем серверу восстановленное состояние звука/AFK (команды потокобезопасны —
+            // шлём напрямую), чтобы остальные участники сразу видели наши иконки.
             if (connected && context != null) {
                 bool micMuted = AppSettings.GetMicMuted(context);
                 bool soundMuted = AppSettings.GetSoundMuted(context);
@@ -286,11 +280,17 @@ namespace MobileTS {
                 }
 
                 // Подгружаем историю чата канала, в котором оказались после подключения.
-                RefreshCurrentChannel(localClient);
+                // Book читается только на потоке клиента.
+                try {
+                    await localClient.Invoke(() => RefreshCurrentChannel(localClient));
+                }
+                catch (ObjectDisposedException) {
+                    // параллельный дисконнект уже закрыл клиента — история не нужна
+                }
             }
 
             // При неудаче освобождаем ресурсы и сбрасываем статические поля тем же путём, что и
-            // обычный дисконнект. Иначе client/clientThread остаются заняты, и повторное подключение
+            // обычный дисконнект. Иначе client остаётся занят, и повторное подключение
             // зависает: Connect выходит рано, а статус соединения уже никогда не сменится.
             if (!connected)
                 await Disconnect();
@@ -299,56 +299,26 @@ namespace MobileTS {
         /// <summary>
         /// Снимок дерева сервера из <see cref="TsFullClient.Book"/>. Полный клиент не отвечает на
         /// server-query команды (channellist/clientlist) — состояние строится из нотификаций в Book,
-        /// читать который нужно на потоке планировщика.
+        /// читать который можно только на потоке клиента (через <see cref="TsFullClient.Invoke{T}"/>).
         /// </summary>
         public static Task<(string serverName, TSLib.Full.Book.Channel[] channels, TSLib.Full.Book.Client[] clients, ChannelId? ownChannel)> GetBookSnapshot() {
+            var empty = ("", Array.Empty<TSLib.Full.Book.Channel>(), Array.Empty<TSLib.Full.Book.Client>(), (ChannelId?)null);
             var c = client;
-            var scheduler = clientScheduler;
-            if (c == null || scheduler == null)
-                return Task.FromResult(("", Array.Empty<TSLib.Full.Book.Channel>(), Array.Empty<TSLib.Full.Book.Client>(), (ChannelId?)null));
+            if (c == null)
+                return Task.FromResult(empty);
 
-            return scheduler.Invoke(() => (
-                serverName ?? "",
-                c.Book.Channels.Values.ToArray(),
-                c.Book.Clients.Values.ToArray(),
-                c.Book.Clients.TryGetValue(c.ClientId, out var self) ? self.Channel : (ChannelId?)null
-            ));
-        }
-
-        public static Task<(bool ok, T[] data)> Invoke<T>(Func<TsFullClient, Task<R<T[], CommandError>>> action) {
-            var c = client;
-            var scheduler = clientScheduler;
-            if (c == null || scheduler == null)
-                return Task.FromResult<(bool, T[])>((false, Array.Empty<T>()));
-
-            return scheduler.InvokeAsync(async () =>
-            {
-                var resp = await action(c);
-                bool ok = resp.GetOk(out T[]? data);
-                return (ok, data ?? Array.Empty<T>());
-            });
-        }
-
-        public static Task<bool> Invoke(Func<TsFullClient, Task<E<CommandError>>> action) {
-            var c = client;
-            var scheduler = clientScheduler;
-            if (c == null || scheduler == null)
-                return Task.FromResult(false);
-
-            return scheduler.InvokeAsync(async () =>
-                (await action(c)).GetOk(out _)
-            );
-        }
-
-        public static Task Invoke(Func<TsFullClient, Task> action) {
-            var c = client;
-            var scheduler = clientScheduler;
-            if (c == null || scheduler == null)
-                return Task.CompletedTask;
-
-            return scheduler.InvokeAsync(async () =>
-                await action(c)
-            );
+            try {
+                return c.Invoke(() => (
+                    serverName ?? "",
+                    c.Book.Channels.Values.ToArray(),
+                    c.Book.Clients.Values.ToArray(),
+                    c.Book.Clients.TryGetValue(c.ClientId, out var self) ? self.Channel : (ChannelId?)null
+                ));
+            }
+            catch (ObjectDisposedException) {
+                // Гонка с дисконнектом: клиент уже освобождён — отдаём пустое дерево.
+                return Task.FromResult(empty);
+            }
         }
 
         // ===================== Управление аудио (с UI-потока) =====================
@@ -365,7 +335,7 @@ namespace MobileTS {
             audio?.SetMicMuted(muted);
             if (context != null)
                 AppSettings.SetMicMuted(context, muted);
-            _ = Invoke(c => c.SendVoid(new TsCommand("clientupdate") { { "client_input_muted", muted } }));
+            _ = client?.SendVoid(new TsCommand("clientupdate") { { "client_input_muted", muted } });
         }
 
         // Глушим воспроизведение локально и сообщаем серверу о выключенном звуке.
@@ -373,7 +343,7 @@ namespace MobileTS {
             audio?.SetSoundMuted(muted);
             if (context != null)
                 AppSettings.SetSoundMuted(context, muted);
-            _ = Invoke(c => c.SendVoid(new TsCommand("clientupdate") { { "client_output_muted", muted } }));
+            _ = client?.SendVoid(new TsCommand("clientupdate") { { "client_output_muted", muted } });
         }
 
         public static bool IsMicMuted => audio?.MicMuted ?? false;
@@ -391,17 +361,21 @@ namespace MobileTS {
                 AppSettings.SetAfk(context, away);
                 AppSettings.SetAfkMessage(context, away ? message : null);
             }
-            _ = Invoke(c => c.SendVoid(new TsCommand("clientupdate") {
+            _ = client?.SendVoid(new TsCommand("clientupdate") {
                 { "client_away", away },
                 { "client_away_message", away ? (message ?? "") : "" },
-            }));
+            });
         }
 
         // ===================== Переход между каналами =====================
 
         // Перемещает себя в указанный канал (с паролем, если канал защищён).
-        public static Task<bool> MoveToChannel(ChannelId channelId, string? password)
-            => Invoke(c => c.ClientMove(c.ClientId, channelId, string.IsNullOrEmpty(password) ? null : password));
+        public static async Task<bool> MoveToChannel(ChannelId channelId, string? password) {
+            var c = client;
+            if (c == null)
+                return false;
+            return (await c.ClientMove(c.ClientId, channelId, string.IsNullOrEmpty(password) ? null : password)).Ok;
+        }
 
         // ===================== Громкость и мьют отдельных клиентов =====================
 
@@ -421,16 +395,20 @@ namespace MobileTS {
 
         public static float GetClientVolume(ClientId id) => audio?.GetClientVolume(id) ?? 1f;
 
-        // Достаёт UID клиента из Book (на потоке планировщика) и применяет к нему сохранение настройки.
+        // Достаёт UID клиента из Book (на потоке клиента) и применяет к нему сохранение настройки.
         private static void PersistClientSetting(ClientId id, Action<string> persist) {
             var c = client;
-            var scheduler = clientScheduler;
-            if (c == null || scheduler == null || context == null)
+            if (c == null || context == null)
                 return;
-            _ = scheduler.Invoke(() => {
-                if (c.Book.Clients.TryGetValue(id, out var cl) && cl.Uid is Uid uid && !string.IsNullOrEmpty(uid.Value))
-                    persist(uid.Value);
-            });
+            try {
+                _ = c.Invoke(() => {
+                    if (c.Book.Clients.TryGetValue(id, out var cl) && cl.Uid is Uid uid && !string.IsNullOrEmpty(uid.Value))
+                        persist(uid.Value);
+                });
+            }
+            catch (ObjectDisposedException) {
+                // гонка с дисконнектом — настройку сохраним в следующий раз
+            }
         }
 
         // Применяет сохранённые по UID громкость/мьют к вошедшему клиенту (вызывается на потоке планировщика).
@@ -459,7 +437,6 @@ namespace MobileTS {
             AppLog.I("Client", "Отключение и очистка ресурсов: " + (currentAddress ?? ""));
 
             var c = client;
-            var scheduler = clientScheduler;
             var localAudio = audio;
 
             // Сначала останавливаем поток захвата (Dispose делает Join таймер-потока), затем сразу
@@ -467,14 +444,17 @@ namespace MobileTS {
             // остаётся захваченным и системный индикатор микрофона продолжает гореть.
             localAudio?.StopCapture();
 
-            if (c != null && scheduler != null) {
+            if (c != null) {
                 try {
-                    await scheduler.InvokeAsync(() => c.Disconnect());
+                    await c.Disconnect();
                 }
                 catch (Exception ex) {
                     // игнорируем — всё равно освобождаем ресурсы ниже
                     AppLog.W("Client", "Исключение при graceful-дисконнекте", ex);
                 }
+                // Сначала прячем клиента от новых вызовов, затем освобождаем (Dispose гасит и
+                // его собственный поток планировщика).
+                client = null;
                 c.Dispose();
             }
 
@@ -482,12 +462,6 @@ namespace MobileTS {
             // декодированный звук в конвейер вплоть до завершения соединения.
             localAudio?.DisposePlayback();
 
-            // Завершает цикл DoWork выделенного потока, созданного через FromCurrentThread.
-            scheduler?.Dispose();
-
-            client = null;
-            clientScheduler = null;
-            clientThread = null;
             serverName = null;
             currentAddress = null;
             awayActive = false;

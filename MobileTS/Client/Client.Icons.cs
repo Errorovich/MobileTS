@@ -31,28 +31,28 @@ namespace MobileTS {
         // обработчика initserver.
         private static async Task DownloadServerIcon() {
             var c = client;
-            var scheduler = clientScheduler;
             var ctx = context;
             var address = currentAddress;
-            if (c == null || scheduler == null || ctx == null || string.IsNullOrEmpty(address))
+            if (c == null || ctx == null || string.IsNullOrEmpty(address))
                 return;
 
-            byte[]? bytes = await scheduler.InvokeAsync<byte[]?>(async () => {
-                int iconId = c.Book.Server.Icon;
+            byte[]? bytes;
+            try {
+                // Icon (CRC) читаем из Book на потоке клиента; сам file transfer потокобезопасен.
+                int iconId = await c.Invoke(() => c.Book.Server.Icon);
                 if (iconId == 0)
-                    return null;
-                try {
-                    using var ms = new MemoryStream();
-                    // Путь иконки — беззнаковый CRC; иконки лежат в служебном «канале 0».
-                    var r = await c.DownloadFile(ms, new ChannelId(0), "/icon_" + unchecked((uint)iconId), "", closeStream: false);
-                    if (!r.GetOk(out var token) || token.Status != TransferStatus.Done)
-                        return null;
-                    return ms.ToArray();
-                }
-                catch {
-                    return null;
-                }
-            });
+                    return;
+                using var ms = new MemoryStream();
+                // Путь иконки — беззнаковый CRC; иконки лежат в служебном «канале 0».
+                var r = await c.DownloadFile(ms, new ChannelId(0), "/icon_" + unchecked((uint)iconId), "", closeStream: false);
+                if (!r.GetOk(out var token) || token.Status != TransferStatus.Done)
+                    return;
+                bytes = ms.ToArray();
+            }
+            catch {
+                // сеть/гонка с дисконнектом — иконка не критична
+                return;
+            }
 
             if (bytes == null || bytes.Length == 0)
                 return;

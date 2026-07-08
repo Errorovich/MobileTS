@@ -4,7 +4,7 @@ using Android.Content.PM;
 using Android.OS;
 using System.Text.Json;
 using MobileTS.Logging;
-using static TSLib.Full.TsFullClient;
+using TSLib.Full;
 
 namespace MobileTS.Services {
     [Service(ForegroundServiceType = ForegroundService.TypeMicrophone)]
