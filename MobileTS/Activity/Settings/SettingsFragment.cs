@@ -6,6 +6,7 @@ using Android.Media;
 using Android.Views;
 using MobileTS.Audio;
 using TSLib.Audio;
+using TSLib.Audio.Pipes;
 using TSLib.Logging;
 
 namespace MobileTS.Activity.Settings {

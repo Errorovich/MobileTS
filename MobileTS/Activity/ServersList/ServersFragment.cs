@@ -5,7 +5,7 @@ using AndroidX.RecyclerView.Widget;
 using System.Text.Json;
 using MobileTS.Logging;
 using MobileTS.Services;
-using TSLib;
+using TSLib.Shared;
 using TSLib.Full;
 
 namespace MobileTS.Activity.ServersList {

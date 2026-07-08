@@ -1,5 +1,5 @@
 ﻿using Android.Media;
-using TSLib;
+using TSLib.Shared;
 using TSLib.Audio;
 
 namespace MobileTS.Audio

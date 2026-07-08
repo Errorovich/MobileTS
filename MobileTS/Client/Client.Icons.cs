@@ -1,8 +1,9 @@
 using System.IO;
 using System.Text;
 using Android.Content;
-using TSLib;
+using TSLib.ClientBase;
 using TSLib.Full;
+using TSLib.Shared;
 
 namespace MobileTS {
     // Иконки сервера. Скачиваются через file transfer TeamSpeak (нужно активное подключение) после

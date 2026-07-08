@@ -1,9 +1,9 @@
 using MobileTS.Audio;
-using TSLib;
 using TSLib.Audio;
-using TSLib.Audio.Opus;
+using TSLib.Audio.Pipes;
 using TSLib.Full;
 using TSLib.Helper;
+using TSLib.Shared;
 
 namespace MobileTS {
     internal static partial class Client {

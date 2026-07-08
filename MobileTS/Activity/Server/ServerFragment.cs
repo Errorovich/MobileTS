@@ -6,8 +6,8 @@ using Android.Views;
 using Android.Widget;
 using AndroidX.RecyclerView.Widget;
 using MobileTS.Audio;
-using TSLib;
-using TSLib.Audio;
+using TSLib.Shared;
+using TSLib.Audio.Pipes;
 using BookChannel = TSLib.Full.Book.Channel;
 using BookClient = TSLib.Full.Book.Client;
 

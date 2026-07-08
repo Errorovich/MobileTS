@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Android.Content;
-using TSLib;
 using TSLib.Full;
+using TSLib.Shared;
 
 namespace MobileTS {
     // Чат канала. История теперь сохраняется на диск по ключу «адрес сервера + ID канала»

@@ -91,7 +91,7 @@ namespace MobileTS.Activity.Server {
             }
 
             // Перекрасить (без анимации) карточку канала, содержащую клиента.
-            public void RecolorClient(TSLib.ClientId id) {
+            public void RecolorClient(TSLib.Shared.ClientId id) {
                 for (int i = 0; i < _items.Count; i++) {
                     if (_items[i].Members.Any(m => m.Id.Equals(id))) {
                         NotifyItemChanged(i, RecolorPayload);

@@ -7,11 +7,12 @@ using Android.Provider;
 using Android.Runtime;
 using MobileTS.Audio;
 using MobileTS.Logging;
-using TSLib;
 using TSLib.Audio;
-using TSLib.Audio.Opus;
+using TSLib.Audio.Pipes;
 using TSLib.Commands;
+using TSLib.Crypto;
 using TSLib.Full;
+using TSLib.Shared;
 
 namespace MobileTS {
     internal static partial class Client {
